@@ -9,9 +9,14 @@ import {
 } from "react"
 
 import { decryptFileJson, encryptFileJson } from "@/lib/crypto/file"
+import type { EncryptedVaultBlob } from "@/lib/crypto/vault"
 import type { JsonValue, VaultArchive } from "@/lib/vault/fs"
 import { getNode, putFile } from "@/lib/vault/fs"
 import { saveVault, unlockVault } from "@/lib/vault/persist"
+import {
+  buildExportBlob,
+  mergeImportIntoArchive,
+} from "@/lib/vault/transfer"
 
 type VaultContextValue = {
   unlocked: boolean
@@ -37,6 +42,24 @@ type VaultContextValue = {
     json: JsonValue,
     options?: { icon?: string }
   ) => Promise<void>
+  /**
+   * Re-encrypt the outer vault blob under a new master password.
+   * Does not rotate the file DEK. Session stays unlocked on success.
+   */
+  changeMasterPassword: (current: string, next: string) => Promise<void>
+  /**
+   * Encrypt the live vault (no recycle bin) as a CKV2 blob for download.
+   * Uses the current master password.
+   */
+  exportEncryptedVault: () => Promise<EncryptedVaultBlob>
+  /**
+   * Decrypt an exported CKV2 blob and merge into a new isolated root folder.
+   * Returns the path of that folder. Existing paths are never overwritten.
+   */
+  importEncryptedVault: (
+    blob: EncryptedVaultBlob,
+    password: string
+  ) => Promise<string>
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null)
@@ -126,6 +149,69 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     [commit]
   )
 
+  const changeMasterPassword = useCallback(
+    async (current: string, next: string) => {
+      if (!payload || !masterPassword || !fileDekBytesRef.current) {
+        throw new Error("Vault is locked.")
+      }
+      if (current !== masterPassword) {
+        throw new Error("Invalid master password.")
+      }
+      if (!next) {
+        throw new Error("New password cannot be empty.")
+      }
+      if (next === masterPassword) {
+        throw new Error("New password must be different from the current one.")
+      }
+      setSaving(true)
+      setSaveError(null)
+      try {
+        await saveVault(payload, fileDekBytesRef.current, next)
+        setMasterPassword(next)
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to change master password."
+        setSaveError(message)
+        throw err
+      } finally {
+        setSaving(false)
+      }
+    },
+    [payload, masterPassword]
+  )
+
+  const exportEncryptedVault = useCallback(async (): Promise<EncryptedVaultBlob> => {
+    if (!payload || !masterPassword || !fileDekBytesRef.current) {
+      throw new Error("Vault is locked.")
+    }
+    return buildExportBlob(payload, fileDekBytesRef.current, masterPassword)
+  }, [payload, masterPassword])
+
+  const importEncryptedVault = useCallback(
+    async (blob: EncryptedVaultBlob, password: string): Promise<string> => {
+      const key = fileDekKeyRef.current
+      if (!payload || !key) {
+        throw new Error("Vault is locked.")
+      }
+      if (!password) {
+        throw new Error("Import password cannot be empty.")
+      }
+
+      let folderPath = ""
+      await commit(async (archive) => {
+        const result = await mergeImportIntoArchive(
+          archive,
+          key,
+          blob,
+          password
+        )
+        folderPath = result.folderPath
+      })
+      return folderPath
+    },
+    [payload, commit]
+  )
+
   const value = useMemo(
     () => ({
       unlocked: payload !== null,
@@ -138,6 +224,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       decryptFile,
       commit,
       putEncryptedFile,
+      changeMasterPassword,
+      exportEncryptedVault,
+      importEncryptedVault,
     }),
     [
       payload,
@@ -149,6 +238,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       decryptFile,
       commit,
       putEncryptedFile,
+      changeMasterPassword,
+      exportEncryptedVault,
+      importEncryptedVault,
     ]
   )
 

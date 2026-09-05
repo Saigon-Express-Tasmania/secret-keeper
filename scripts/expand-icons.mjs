@@ -4,8 +4,20 @@ import { createRequire } from "node:module"
 const require = createRequire(import.meta.url)
 const fluentData = require("@iconify-json/fluent-color/icons.json")
 const vscodeData = require("@iconify-json/vscode-icons/icons.json")
+const parkData = require("@iconify-json/icon-park/icons.json")
 
-const LIMIT = 500
+const LIMIT = 1000
+
+const GENERAL_GROUPS = [
+  "security",
+  "folders",
+  "communication",
+  "status",
+  "people",
+  "work",
+  "files",
+  "misc",
+]
 
 /** @type {Record<string, [string, string]>} base -> [label, group] */
 const FLUENT_OVERRIDES = {
@@ -136,6 +148,19 @@ const EXTRA_LABELS = {
   mysql: "MySQL",
   mongo: "MongoDB",
   wasm: "WebAssembly",
+  "two-dimensional-code": "QR Code",
+  "two-dimensional-code-one": "QR Code 1",
+  "two-dimensional-code-two": "QR Code 2",
+  "scan-code": "Scan code",
+  "electronic-door-lock": "Door lock",
+  "electronic-locks-close": "Locks closed",
+  "electronic-locks-open": "Locks open",
+  "cloud-storage": "Cloud storage",
+  "id-card": "ID card",
+  "id-card-h": "ID card H",
+  "id-card-v": "ID card V",
+  ppt: "PowerPoint",
+  youtobe: "YouTube",
 }
 
 const FILE_TYPE_PRIORITY = [
@@ -269,11 +294,411 @@ const FILE_TYPE_PRIORITY = [
   "ssh",
 ]
 
+/** Prefer these IconPark names first within each group (skip if missing). */
+const PARK_PRIORITY = {
+  security: [
+    "lock",
+    "lock-one",
+    "unlock",
+    "unlock-one",
+    "key",
+    "shield",
+    "shield-add",
+    "protect",
+    "protection",
+    "security",
+    "permissions",
+    "strongbox",
+    "fingerprint",
+    "fingerprint-two",
+    "fingerprint-three",
+    "personal-privacy",
+    "people-safe",
+    "people-safe-one",
+    "electronic-door-lock",
+    "electronic-locks-close",
+    "electronic-locks-open",
+    "induction-lock",
+    "data-lock",
+    "database-lock",
+    "email-lock",
+    "email-security",
+    "file-lock",
+    "file-lock-one",
+    "folder-lock",
+    "folder-lock-one",
+    "folder-protection",
+    "folder-protection-one",
+    "two-dimensional-code",
+    "two-dimensional-code-one",
+    "two-dimensional-code-two",
+    "scan-code",
+    "insurance",
+    "surveillance-cameras",
+    "surveillance-cameras-one",
+    "surveillance-cameras-two",
+    "safe-retrieval",
+    "umbrella",
+    "umbrella-one",
+    "umbrella-two",
+    "harm",
+    "caution",
+    "keyhole",
+    "locking-computer",
+    "locking-laptop",
+    "locking-web",
+    "locking-picture",
+    "forbid",
+    "database-forbid",
+    "folder-block",
+    "folder-block-one",
+    "email-block",
+    "inspection",
+    "flight-safety",
+    "prison",
+    "seal",
+    "scan",
+    "scanning",
+    "scanning-two",
+  ],
+  folders: [
+    "folder",
+    "folder-close",
+    "folder-open",
+    "folder-one",
+    "folder-plus",
+    "folder-minus",
+    "folder-success",
+    "folder-failed",
+    "folder-search",
+    "folder-settings",
+    "folder-upload",
+    "folder-download",
+    "folder-code",
+    "folder-focus",
+    "folder-quality",
+    "folder-music",
+    "folder-conversion",
+    "folder-withdrawal",
+    "seo-folder",
+    "document-folder",
+    "briefcase",
+    "box",
+    "toolkit",
+    "cloud-storage",
+    "building-one",
+    "building-two",
+    "building-three",
+    "building-four",
+    "application",
+    "application-one",
+    "application-two",
+    "all-application",
+    "category-management",
+    "city",
+    "city-one",
+    "castle",
+    "warehouse",
+    "inbox-in",
+    "inbox-out",
+    "inbox-r",
+    "inbox-success",
+    "inbox-download-r",
+    "inbox-upload-r",
+    "components",
+    "data-server",
+    "data-all",
+    "data-display",
+    "data-sheet",
+    "server",
+  ],
+  communication: [
+    "mail",
+    "send-email",
+    "email-successfully",
+    "email-push",
+    "email-search",
+    "email-fail",
+    "email-down",
+    "timed-mail",
+    "phone",
+    "phone-call",
+    "phone-telephone",
+    "phone-incoming",
+    "phone-outgoing",
+    "phone-missed",
+    "phone-video-call",
+    "comment",
+    "comment-one",
+    "comments",
+    "communication",
+    "message",
+    "message-one",
+    "message-unread",
+    "message-sent",
+    "message-privacy",
+    "message-security",
+    "message-search",
+    "text-message",
+    "voice-message",
+    "voicemail",
+    "announcement",
+    "broadcast",
+    "broadcast-one",
+    "broadcast-radio",
+    "share",
+    "share-one",
+    "share-two",
+    "share-three",
+    "send",
+    "send-one",
+    "video",
+    "video-one",
+    "video-two",
+    "video-conference",
+    "headset",
+    "voice",
+    "voice-one",
+    "telegram",
+    "twitter",
+    "wechat",
+  ],
+  people: [
+    "people",
+    "peoples",
+    "peoples-two",
+    "user",
+    "user-business",
+    "avatar",
+    "add-user",
+    "reduce-user",
+    "right-user",
+    "wrong-user",
+    "people-plus",
+    "people-minus",
+    "people-search",
+    "people-search-one",
+    "people-speak",
+    "people-top-card",
+    "people-bottom-card",
+    "people-unknown",
+    "people-download",
+    "people-upload",
+    "customer",
+    "cooperative-handshake",
+    "id-card",
+    "id-card-h",
+    "id-card-v",
+    "passport",
+    "passport-one",
+    "necktie",
+    "worker",
+    "boy",
+    "girl",
+    "women",
+    "woman",
+  ],
+  work: [
+    "wallet",
+    "wallet-one",
+    "wallet-two",
+    "wallet-three",
+    "bank",
+    "bank-card",
+    "bank-card-one",
+    "bank-card-two",
+    "bank-transfer",
+    "paypal",
+    "alipay",
+    "bitcoin",
+    "dollar",
+    "currency",
+    "credit",
+    "payment-method",
+    "pay-code",
+    "pay-code-one",
+    "pay-code-two",
+    "calendar",
+    "calendar-dot",
+    "calendar-three",
+    "schedule",
+    "appointment",
+    "calculator",
+    "calculator-one",
+    "chart-line",
+    "chart-line-area",
+    "chart-histogram",
+    "chart-histogram-one",
+    "chart-histogram-two",
+    "chart-pie",
+    "chart-pie-one",
+    "chart-proportion",
+    "chart-ring",
+    "chart-scatter",
+    "chart-stock",
+    "chart-graph",
+    "analysis",
+    "trend",
+    "trend-two",
+    "trending-up",
+    "dashboard",
+    "dashboard-one",
+    "dashboard-two",
+    "stock-market",
+    "transaction",
+    "transaction-order",
+    "sales-report",
+    "setting",
+    "setting-one",
+    "setting-two",
+    "setting-three",
+    "setting-config",
+    "setting-computer",
+    "setting-laptop",
+    "setting-web",
+    "computer",
+    "computer-one",
+    "laptop",
+    "workbench",
+    "coupon",
+    "consume",
+    "deposit",
+  ],
+  files: [
+    "book",
+    "book-one",
+    "book-open",
+    "bookshelf",
+    "address-book",
+    "clipboard",
+    "agreement",
+    "certificate",
+    "word",
+    "ppt",
+    "powerpoint",
+    "excel",
+    "notes",
+    "notepad",
+    "editor",
+    "edit",
+    "edit-one",
+    "edit-two",
+    "doc-detail",
+    "doc-success",
+    "doc-fail",
+    "doc-search",
+    "doc-add",
+    "audio-file",
+    "video-file",
+    "data-file",
+    "table-file",
+    "collection-files",
+    "termination-file",
+    "bill",
+    "invoice",
+    "copy",
+    "copy-one",
+    "copy-link",
+  ],
+  status: [
+    "star",
+    "star-one",
+    "bookmark",
+    "bookmark-one",
+    "bookmark-three",
+    "flag",
+    "heart",
+    "pin",
+    "pushpin",
+    "success",
+    "check",
+    "check-one",
+    "check-correct",
+    "checkbox",
+    "checklist",
+    "attention",
+    "alarm",
+    "badge",
+    "badge-two",
+    "trophy",
+    "vip",
+    "vip-one",
+    "crown",
+    "crown-two",
+    "crown-three",
+    "thumbs-up",
+    "thumbs-down",
+    "remind",
+    "tips",
+    "tips-one",
+    "help",
+    "info",
+    "error",
+    "correct",
+    "done-all",
+    "unlike",
+    "preview-open",
+    "preview-close",
+  ],
+  misc: [
+    "home",
+    "home-two",
+    "earth",
+    "world",
+    "planet",
+    "wifi",
+    "camera",
+    "camera-one",
+    "gift",
+    "puzzle",
+    "robot",
+    "robot-one",
+    "robot-two",
+    "time",
+    "local",
+    "local-two",
+    "link",
+    "link-one",
+    "search",
+    "tag",
+    "tag-one",
+    "picture",
+    "picture-one",
+    "image",
+    "bluetooth",
+    "compass",
+    "compass-one",
+    "map",
+    "airplane",
+    "car",
+    "rocket",
+    "rocket-one",
+    "light",
+    "light-member",
+    "idea",
+    "creative",
+    "game",
+    "music",
+    "headset-one",
+    "history",
+    "clock-tower",
+    "big-clock",
+    "alarm-clock",
+    "stopwatch",
+    "history-query",
+    "link-cloud",
+    "link-interrupt",
+    "unlink",
+    "globe",
+  ],
+}
+
 const ACRONYMS = new Set([
   "ai",
   "api",
   "aws",
   "cli",
+  "cpu",
   "css",
   "csv",
   "db",
@@ -281,6 +706,7 @@ const ACRONYMS = new Set([
   "git",
   "go",
   "gpg",
+  "gps",
   "html",
   "http",
   "id",
@@ -292,32 +718,39 @@ const ACRONYMS = new Set([
   "mdx",
   "npm",
   "os",
+  "otp",
   "pdf",
   "php",
   "png",
+  "ppt",
+  "qr",
   "rss",
+  "sd",
+  "seo",
   "sql",
   "ssh",
+  "ssl",
   "svg",
-  "toml",
+  "tv",
   "ts",
   "ui",
   "url",
+  "usb",
+  "vip",
   "vpn",
   "wasm",
   "xml",
   "yaml",
   "yml",
   "zip",
-  "csv",
-  "pdf",
-  "sql",
-  "svg",
-  "aws",
   "gcp",
-  "ios",
-  "sql",
 ])
+
+const PARK_SKIP =
+  /^(align-|alignment-|bring-|send-backward|send-to-back|sent-to-back|text-bold|text-italic|text-underline|text-style|strikethrough|background-color|drop-shadow-|corner-|block-|weixin-|bytedance|clothes-|sperm|uterus|abdominal|plastic-surgery|breast-pump|endocrine|renal|xiaodu|xigua|xingfuli|xingtu|zijinyunying|dongchedi|tuchong|ulikecam|qiyehao|qingniao|baokemeng|baby-|diapers|bib$|breast)/
+
+const KEYBOARD_KEY =
+  /^(one|two|three|four|five|six|seven|eight|nine|zero|asterisk|delete)-key$|^arrow-keys$/
 
 function fluentBase(name) {
   const m = name.match(/^(.*)-(16|20|24|28|32|48)$/)
@@ -409,6 +842,244 @@ function groupFluent(base) {
   return "misc"
 }
 
+function hasToken(name, ...tokens) {
+  const set = new Set(name.split("-"))
+  return tokens.some((t) => set.has(t))
+}
+
+function skipPark(name) {
+  if (PARK_SKIP.test(name)) return true
+  if (/-face$/.test(name) || name.endsWith("-face-with-open-mouth")) return true
+  if (name.endsWith("-zodiac")) return true
+  return false
+}
+
+function groupPark(name) {
+  if (!KEYBOARD_KEY.test(name)) {
+    if (
+      hasToken(
+        name,
+        "lock",
+        "unlock",
+        "key",
+        "keyhole",
+        "locking",
+        "shield",
+        "protect",
+        "protection",
+        "security",
+        "permissions",
+        "fingerprint",
+        "privacy",
+        "strongbox",
+        "surveillance",
+        "forbid"
+      ) ||
+      name === "safe-retrieval" ||
+      name.startsWith("people-safe") ||
+      name.startsWith("two-dimensional-code") ||
+      name.startsWith("scan-code") ||
+      name.startsWith("electronic-locks") ||
+      name === "electronic-door-lock" ||
+      name === "induction-lock" ||
+      name === "insurance" ||
+      name === "harm" ||
+      name === "caution" ||
+      name === "inspection" ||
+      name === "flight-safety" ||
+      name === "prison" ||
+      name === "seal" ||
+      name === "scan" ||
+      name.startsWith("scanning") ||
+      name.startsWith("umbrella") ||
+      name.startsWith("folder-block") ||
+      name === "email-block" ||
+      name === "database-forbid"
+    ) {
+      return "security"
+    }
+  }
+
+  if (
+    hasToken(
+      name,
+      "people",
+      "peoples",
+      "user",
+      "avatar",
+      "customer",
+      "worker",
+      "woman",
+      "women",
+      "passport",
+      "necktie"
+    ) ||
+    name === "boy" ||
+    name.startsWith("boy-") ||
+    name === "girl" ||
+    name.startsWith("girl-") ||
+    name === "cooperative-handshake" ||
+    name.startsWith("id-card")
+  ) {
+    return "people"
+  }
+
+  if (
+    hasToken(
+      name,
+      "file",
+      "document",
+      "doc",
+      "book",
+      "clipboard",
+      "notebook",
+      "agreement",
+      "certificate",
+      "word",
+      "ppt",
+      "powerpoint",
+      "excel",
+      "notes",
+      "editor",
+      "notepad",
+      "invoice",
+      "bill"
+    ) ||
+    name.startsWith("doc-")
+  ) {
+    return "files"
+  }
+
+  if (
+    hasToken(
+      name,
+      "mail",
+      "email",
+      "phone",
+      "comment",
+      "comments",
+      "message",
+      "chat",
+      "video",
+      "headset",
+      "broadcast",
+      "announcement",
+      "communication",
+      "megaphone",
+      "share",
+      "voice",
+      "telegram",
+      "voicemail"
+    ) ||
+    name === "send" ||
+    name.startsWith("send-") ||
+    name === "receive"
+  ) {
+    return "communication"
+  }
+
+  if (
+    hasToken(
+      name,
+      "wallet",
+      "bank",
+      "pay",
+      "paypal",
+      "dollar",
+      "bitcoin",
+      "currency",
+      "credit",
+      "calendar",
+      "chart",
+      "setting",
+      "config",
+      "laptop",
+      "computer",
+      "workbench",
+      "trend",
+      "analysis",
+      "dashboard",
+      "stock",
+      "transaction",
+      "deposit",
+      "coupon",
+      "calculator",
+      "finance",
+      "sales",
+      "schedule",
+      "appointment",
+      "histogram",
+      "consume"
+    )
+  ) {
+    return "work"
+  }
+
+  if (
+    hasToken(
+      name,
+      "folder",
+      "database",
+      "cloud",
+      "briefcase",
+      "building",
+      "toolbox",
+      "box",
+      "warehouse",
+      "storage",
+      "cabinet",
+      "application",
+      "category",
+      "city",
+      "castle",
+      "library",
+      "archive",
+      "components",
+      "inbox",
+      "server",
+      "toolkit"
+    )
+  ) {
+    return "folders"
+  }
+
+  if (
+    hasToken(
+      name,
+      "star",
+      "bookmark",
+      "flag",
+      "heart",
+      "success",
+      "check",
+      "attention",
+      "alarm",
+      "badge",
+      "trophy",
+      "vip",
+      "unlike",
+      "thumbs",
+      "crown",
+      "remind",
+      "tips",
+      "help",
+      "question",
+      "error",
+      "done",
+      "correct",
+      "medal",
+      "ribbon",
+      "pin",
+      "pushpin",
+      "preview"
+    )
+  ) {
+    return "status"
+  }
+
+  return "misc"
+}
+
 const fluentAvailable = new Set(Object.keys(fluentData.icons))
 const fluentBases = new Map()
 for (const name of fluentAvailable) {
@@ -421,34 +1092,33 @@ for (const name of fluentAvailable) {
 
 /** @type {{ prefix: string, name: string, label: string, group: string }[]} */
 const catalog = []
-const fluentNames = []
+const seen = new Set()
+
+function addIcon(prefix, name, group) {
+  const key = `${prefix}:${name}`
+  if (seen.has(key)) return false
+  if (catalog.length >= LIMIT) return false
+  catalog.push({
+    prefix,
+    name,
+    label: labelFor(name),
+    group,
+  })
+  seen.add(key)
+  return true
+}
 
 for (const base of [...fluentBases.keys()].sort()) {
   const name = pickFluentName(base, fluentAvailable)
   if (!name) throw new Error(`missing fluent ${base}`)
-  fluentNames.push(name)
-  catalog.push({
-    prefix: "fluent-color",
-    name,
-    label: labelFor(base),
-    group: groupFluent(base),
-  })
+  addIcon("fluent-color", name, groupFluent(base))
 }
 
 const vscodeAvailable = new Set(Object.keys(vscodeData.icons))
 
 function addVscode(name, group) {
   if (!vscodeAvailable.has(name)) return false
-  if (catalog.some((c) => c.prefix === "vscode-icons" && c.name === name)) {
-    return false
-  }
-  catalog.push({
-    prefix: "vscode-icons",
-    name,
-    label: labelFor(name),
-    group,
-  })
-  return true
+  return addIcon("vscode-icons", name, group)
 }
 
 addVscode("default-folder", "folderTypes")
@@ -473,6 +1143,56 @@ function addFileType(shortName) {
 }
 
 for (const shortName of FILE_TYPE_PRIORITY) addFileType(shortName)
+
+const parkAvailable = new Set(Object.keys(parkData.icons))
+/** @type {Record<string, string[]>} */
+const parkByGroup = Object.fromEntries(GENERAL_GROUPS.map((g) => [g, []]))
+
+for (const name of [...parkAvailable].sort()) {
+  if (skipPark(name)) continue
+  const group = groupPark(name)
+  parkByGroup[group].push(name)
+}
+
+for (const group of GENERAL_GROUPS) {
+  const priority = PARK_PRIORITY[group] ?? []
+  const preferred = []
+  const rest = []
+  const prioritySet = new Set(priority)
+  for (const name of priority) {
+    if (parkAvailable.has(name) && parkByGroup[group].includes(name)) {
+      preferred.push(name)
+    }
+  }
+  for (const name of parkByGroup[group]) {
+    if (!prioritySet.has(name)) rest.push(name)
+  }
+  parkByGroup[group] = [...preferred, ...rest]
+}
+
+function generalCounts() {
+  /** @type {Record<string, number>} */
+  const counts = Object.fromEntries(GENERAL_GROUPS.map((g) => [g, 0]))
+  for (const item of catalog) {
+    if (counts[item.group] != null) counts[item.group]++
+  }
+  return counts
+}
+
+while (catalog.length < LIMIT) {
+  const counts = generalCounts()
+  const groupsWithStock = GENERAL_GROUPS.filter(
+    (g) => parkByGroup[g].length > 0
+  )
+  if (groupsWithStock.length === 0) break
+  groupsWithStock.sort(
+    (a, b) => counts[a] - counts[b] || a.localeCompare(b)
+  )
+  const target = groupsWithStock[0]
+  const name = parkByGroup[target].shift()
+  if (!name) break
+  addIcon("icon-park", name, target)
+}
 
 const remainingFileTypes = [...fileTypeSet]
   .filter((n) => !n.startsWith("light-") && !/\d$/.test(n))
@@ -503,6 +1223,9 @@ const fluentOutNames = catalog
 const vscodeOutNames = catalog
   .filter((c) => c.prefix === "vscode-icons")
   .map((c) => c.name)
+const parkOutNames = catalog
+  .filter((c) => c.prefix === "icon-park")
+  .map((c) => c.name)
 
 fs.writeFileSync(
   "src/lib/icons/fluent-color.json",
@@ -511,6 +1234,10 @@ fs.writeFileSync(
 fs.writeFileSync(
   "src/lib/icons/vscode-icons.json",
   JSON.stringify(subset(vscodeData, vscodeOutNames))
+)
+fs.writeFileSync(
+  "src/lib/icons/icon-park.json",
+  JSON.stringify(subset(parkData, parkOutNames))
 )
 
 const entries = catalog
@@ -521,9 +1248,11 @@ const entries = catalog
   .join("\n")
 
 const ts = `/**
- * Curated Fluent UI System Color Icons (MIT, Microsoft) plus VSCode Icons (MIT).
+ * Curated Fluent UI System Color Icons (MIT, Microsoft), IconPark
+ * (Apache 2.0, ByteDance), plus VSCode Icons (MIT).
  * Full sets via Iconify:
  * - https://icon-sets.iconify.design/fluent-color/
+ * - https://icon-sets.iconify.design/icon-park/
  * - https://icon-sets.iconify.design/vscode-icons/
  *
  * Icons are vendored offline so the vault app never fetches from Iconify CDN.
@@ -533,6 +1262,7 @@ const ts = `/**
 import { addCollection } from "@iconify/react"
 
 import fluentColorData from "@/lib/icons/fluent-color.json"
+import iconParkData from "@/lib/icons/icon-park.json"
 import vscodeIconsData from "@/lib/icons/vscode-icons.json"
 import {
   DEFAULT_FILE_ICON,
@@ -600,6 +1330,7 @@ const catalogIds = new Set(ICON_CATALOG.map((i) => i.id))
 /** Register vendored icon collections with Iconify (call once at startup). */
 export function registerFluentColorIcons(): void {
   addCollection(fluentColorData as Parameters<typeof addCollection>[0])
+  addCollection(iconParkData as Parameters<typeof addCollection>[0])
   addCollection(vscodeIconsData as Parameters<typeof addCollection>[0])
 }
 
@@ -628,8 +1359,19 @@ const fluentKb = (
 const vscodeKb = (
   fs.statSync("src/lib/icons/vscode-icons.json").size / 1024
 ).toFixed(1)
+const parkKb = (
+  fs.statSync("src/lib/icons/icon-park.json").size / 1024
+).toFixed(1)
+
+const groupCounts = {}
+for (const item of catalog) {
+  groupCounts[item.group] = (groupCounts[item.group] || 0) + 1
+}
+
 console.log(
-  `icons ${catalog.length} (fluent ${fluentOutNames.length}, vscode ${vscodeOutNames.length})`
+  `icons ${catalog.length} (fluent ${fluentOutNames.length}, icon-park ${parkOutNames.length}, vscode ${vscodeOutNames.length})`
 )
 console.log(`fluent-color.json ${fluentKb} KB`)
+console.log(`icon-park.json ${parkKb} KB`)
 console.log(`vscode-icons.json ${vscodeKb} KB`)
+console.log("groups", groupCounts)

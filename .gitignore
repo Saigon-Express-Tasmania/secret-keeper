@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+.local/
+
+# KeePass sources / plaintext dumps (never commit)
+*.kdbx
+*.kdbx.lock
 
 # Environment (keep .env.example)
 .env

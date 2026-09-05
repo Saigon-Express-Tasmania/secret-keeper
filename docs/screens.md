@@ -31,7 +31,7 @@ If already unlocked, visiting `/` redirects to `/dashboard`.
 
 **UI:** full-height file explorer:
 
-- **Top bar:** breadcrumb, search (name / folder path only), New folder, New file (hidden in Recycle Bin), Lock
+- **Top bar:** breadcrumb, search (name / folder path only), New folder, New file (hidden in Recycle Bin), Change password, Lock
 - **Left sidebar:** root folders + **Recycle Bin** (count badge)
 - **Main pane:** folder listing, account file editor, search results, or Recycle Bin listing
 
@@ -48,6 +48,7 @@ If already unlocked, visiting `/` redirects to `/dashboard`.
 - **Multi-select:** checkboxes on listing / search rows; when items are selected, **Delete** moves them to Recycle Bin (whole folder trees as one item). No confirm on soft-delete.
 - **Recycle Bin:** restore selected items to their original paths (or `name (restored)` if conflict); **Delete forever** asks for confirmation then purges. Files are not opened from the bin — restore first.
 - Lock clears payload, master password, DEK refs, and any open-file plaintext, then returns to Gate
+- **Change password** verifies the current master password, re-encrypts the outer CKV2 blob under the new password (file DEK unchanged), updates the session secret, and stays unlocked
 
 ## Routing guard
 

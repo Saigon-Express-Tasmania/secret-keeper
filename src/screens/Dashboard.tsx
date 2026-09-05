@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import { AppBackdrop } from "@/components/AppBackdrop"
+import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterPasswordDialog"
 import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog"
 import {
   CreateNodeDialog,
@@ -21,10 +22,12 @@ import {
 import { FileViewer } from "@/components/dashboard/FileViewer"
 import { FolderSidebar } from "@/components/dashboard/FolderSidebar"
 import { IconPickerDialog } from "@/components/dashboard/IconPickerDialog"
+import { ImportVaultDialog } from "@/components/dashboard/ImportVaultDialog"
 import { RecycleBinListing } from "@/components/dashboard/RecycleBinListing"
 import { RenameDialog } from "@/components/dashboard/RenameDialog"
 import { SearchResults } from "@/components/dashboard/SearchResults"
 import { SelectionToolbar } from "@/components/dashboard/SelectionToolbar"
+import { ToolsMenu } from "@/components/dashboard/ToolsMenu"
 import { UnsavedChangesDialog } from "@/components/dashboard/UnsavedChangesDialog"
 import type { AccountEditorHandle } from "@/components/editor/AccountEditor"
 import {
@@ -71,6 +74,19 @@ import {
   purgeRecycleBin,
   restoreFromRecycleBin,
 } from "@/lib/vault/recycleBin"
+import { exportFilename } from "@/lib/vault/transfer"
+
+function downloadBytes(bytes: Uint8Array, filename: string) {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  const blob = new Blob([copy.buffer], { type: "application/octet-stream" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 export function Dashboard() {
   const {
@@ -81,6 +97,9 @@ export function Dashboard() {
     saveError,
     commit,
     putEncryptedFile,
+    changeMasterPassword,
+    exportEncryptedVault,
+    importEncryptedVault,
   } = useVault()
   const navigate = useNavigate()
 
@@ -113,6 +132,9 @@ export function Dashboard() {
   const [leavePending, setLeavePending] = useState<(() => void) | null>(null)
   const [leaveBusy, setLeaveBusy] = useState(false)
   const [decryptListing, setDecryptListing] = useState(readDecryptListingPref)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const editorRef = useRef<AccountEditorHandle | null>(null)
 
   const resolvedPath = currentPath ?? rootFolders[0]?.name ?? ""
@@ -162,6 +184,25 @@ export function Dashboard() {
       lock()
       navigate("/")
     })
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const blob = await exportEncryptedVault()
+      downloadBytes(blob, exportFilename())
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to export vault."
+      window.alert(message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleImport(blob: Uint8Array, password: string) {
+    const folderPath = await importEncryptedVault(blob, password)
+    navigateTo(folderPath)
   }
 
   function navigateTo(path: string) {
@@ -538,6 +579,13 @@ export function Dashboard() {
             </Button>
           </>
         ) : null}
+        <ToolsMenu
+          disabled={saving}
+          exporting={exporting}
+          onExport={() => void handleExport()}
+          onImport={() => setImportOpen(true)}
+          onChangePassword={() => setChangePasswordOpen(true)}
+        />
         <Button
           variant="outline"
           size="sm"
@@ -727,6 +775,18 @@ export function Dashboard() {
         onSave={() => void confirmLeaveSave()}
         onDiscard={confirmLeaveDiscard}
         onCancel={() => setLeavePending(null)}
+      />
+      <ChangeMasterPasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+        busy={saving}
+        onSubmit={changeMasterPassword}
+      />
+      <ImportVaultDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        busy={saving}
+        onSubmit={handleImport}
       />
     </div>
   )

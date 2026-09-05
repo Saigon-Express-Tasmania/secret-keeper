@@ -43,6 +43,8 @@ Legacy `CKV1` blobs and archive v2 plaintext files still decrypt and migrate to 
 
 Wrong password or wrong env pepper fails GCM authentication and surfaces as **Invalid master password.**
 
+Changing the master password (Dashboard → Change password) re-wraps the outer CKV2 blob only; per-file bodies and the file DEK are unchanged. A failed upload keeps the previous session password.
+
 The master password must never be sent to Netlify, R2, S3, Supabase, or Google Drive as part of vault unlock.
 
 ## Local replica
