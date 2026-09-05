@@ -1,9 +1,12 @@
-import { Folder, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 
+import { NodeIcon } from "@/components/icons/NodeIcon"
+import type { FsDir } from "@/lib/vault/fs"
+import { resolveNodeIcon } from "@/lib/vault/fs"
 import { cn } from "@/lib/utils"
 
 type FolderSidebarProps = {
-  folders: string[]
+  folders: { name: string; node: FsDir }[]
   activeRoot: string | null
   view: "folder" | "recycle-bin"
   recycleBinCount: number
@@ -31,7 +34,7 @@ export function FolderSidebar({
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
-            {folders.map((name) => {
+            {folders.map(({ name, node }) => {
               const active = view === "folder" && activeRoot === name
               return (
                 <li key={name}>
@@ -45,7 +48,11 @@ export function FolderSidebar({
                         : "hover:bg-accent/60"
                     )}
                   >
-                    <Folder className="size-4 shrink-0 text-muted-foreground" />
+                    <NodeIcon
+                      iconId={resolveNodeIcon(node, name)}
+                      kind="folder"
+                      size={18}
+                    />
                     <span className="truncate">{name}</span>
                   </button>
                 </li>

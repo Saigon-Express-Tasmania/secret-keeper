@@ -32,7 +32,11 @@ type VaultContextValue = {
     mutator: (archive: VaultArchive) => void | Promise<void>
   ) => Promise<void>
   /** Encrypt JSON and write as a new/updated encrypted file, then save. */
-  putEncryptedFile: (path: string, json: JsonValue) => Promise<void>
+  putEncryptedFile: (
+    path: string,
+    json: JsonValue,
+    options?: { icon?: string }
+  ) => Promise<void>
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null)
@@ -107,12 +111,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   )
 
   const putEncryptedFile = useCallback(
-    async (path: string, json: JsonValue) => {
+    async (
+      path: string,
+      json: JsonValue,
+      options?: { icon?: string }
+    ) => {
       const key = fileDekKeyRef.current
       if (!key) throw new Error("Vault is locked.")
       await commit(async (archive) => {
         const enc = await encryptFileJson(json, key)
-        putFile(archive, path, enc)
+        putFile(archive, path, { ...enc, icon: options?.icon })
       })
     },
     [commit]

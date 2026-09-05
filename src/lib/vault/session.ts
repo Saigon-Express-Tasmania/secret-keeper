@@ -12,9 +12,12 @@ import {
 } from "@/lib/crypto/file"
 import {
   collectPlaintextFiles,
+  copyNodeMeta,
   createEmptyArchive,
   isEncryptedFile,
   isPlaintextFile,
+  SEED_DIR_ICONS,
+  SEED_DIRS,
   stripFileDek,
   type FsDir,
   type FsNode,
@@ -41,12 +44,13 @@ function cloneEncryptedTree(root: FsDir): FsDir {
         type: "file",
         nonce: child.nonce,
         ciphertext: child.ciphertext,
+        ...copyNodeMeta(child),
       }
     } else {
       entries[name] = cloneEncryptedTree(child)
     }
   }
-  return { type: "dir", entries }
+  return { type: "dir", entries, ...copyNodeMeta(root) }
 }
 
 async function copyTreeEncrypted(
@@ -54,12 +58,17 @@ async function copyTreeEncrypted(
   to: FsDir,
   key: CryptoKey
 ): Promise<void> {
+  // Preserve directory meta on the destination when copying into an existing dir
+  Object.assign(to, copyNodeMeta(from))
+
   for (const [name, child] of Object.entries(from.entries)) {
     if (child.type === "dir") {
       let dest = to.entries[name]
       if (!dest || dest.type !== "dir") {
-        dest = { type: "dir", entries: {} }
+        dest = { type: "dir", entries: {}, ...copyNodeMeta(child) }
         to.entries[name] = dest
+      } else {
+        Object.assign(dest, copyNodeMeta(child))
       }
       await copyTreeEncrypted(child, dest, key)
     } else if (isPlaintextFile(child)) {
@@ -68,15 +77,80 @@ async function copyTreeEncrypted(
         type: "file",
         nonce: enc.nonce,
         ciphertext: enc.ciphertext,
+        ...copyNodeMeta(child),
       }
     } else if (isEncryptedFile(child)) {
       to.entries[name] = {
         type: "file",
         nonce: child.nonce,
         ciphertext: child.ciphertext,
+        ...copyNodeMeta(child),
       }
     }
   }
+}
+
+/**
+ * Backfill missing createdAt/modifiedAt and seed-folder icons.
+ * Returns true when any node was patched.
+ */
+export function backfillNodeMeta(archive: VaultArchive): boolean {
+  const fallback = archive.updatedAt || new Date().toISOString()
+  let patched = false
+
+  function visitDir(dir: FsDir, pathParts: string[]): void {
+    if (!dir.createdAt) {
+      dir.createdAt = fallback
+      patched = true
+    }
+    if (!dir.modifiedAt) {
+      dir.modifiedAt = dir.createdAt ?? fallback
+      patched = true
+    }
+    if (pathParts.length === 1) {
+      const name = pathParts[0]!
+      if (
+        !dir.icon &&
+        (SEED_DIRS as readonly string[]).includes(name)
+      ) {
+        dir.icon = SEED_DIR_ICONS[name as (typeof SEED_DIRS)[number]]
+        patched = true
+      }
+    }
+    for (const [name, child] of Object.entries(dir.entries)) {
+      if (child.type === "dir") {
+        visitDir(child, [...pathParts, name])
+      } else {
+        if (!child.createdAt) {
+          child.createdAt = fallback
+          patched = true
+        }
+        if (!child.modifiedAt) {
+          child.modifiedAt = child.createdAt ?? fallback
+          patched = true
+        }
+      }
+    }
+  }
+
+  visitDir(archive.root, [])
+
+  for (const entry of archive.recycleBin ?? []) {
+    if (entry.node.type === "dir") {
+      visitDir(entry.node, [])
+    } else {
+      if (!entry.node.createdAt) {
+        entry.node.createdAt = fallback
+        patched = true
+      }
+      if (!entry.node.modifiedAt) {
+        entry.node.modifiedAt = entry.node.createdAt ?? fallback
+        patched = true
+      }
+    }
+  }
+
+  return patched
 }
 
 /**
@@ -99,7 +173,13 @@ export async function prepareSessionArchive(
       root: cloneEncryptedTree(raw.root as FsDir),
       recycleBin: raw.recycleBin ? structuredClone(raw.recycleBin) : [],
     })
-    return { payload, fileDekBytes, fileDekKey, migrated: false }
+    const metaPatched = backfillNodeMeta(payload)
+    return {
+      payload,
+      fileDekBytes,
+      fileDekKey,
+      migrated: metaPatched,
+    }
   }
 
   // Migrate: generate DEK and encrypt any plaintext files
@@ -111,6 +191,7 @@ export async function prepareSessionArchive(
   await copyTreeEncrypted(raw.root, payload.root, fileDekKey)
   // Recycle bin is a v3 feature; carry over if already present and encrypted
   payload.recycleBin = raw.recycleBin ? structuredClone(raw.recycleBin) : []
+  backfillNodeMeta(payload)
 
   return {
     payload: stripFileDek(payload),

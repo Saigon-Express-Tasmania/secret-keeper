@@ -9,10 +9,14 @@ import {
 } from "lucide-react"
 
 import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog"
-import { CreateNodeDialog } from "@/components/dashboard/CreateNodeDialog"
+import {
+  CreateNodeDialog,
+  type CreateNodeResult,
+} from "@/components/dashboard/CreateNodeDialog"
 import { ExplorerListing } from "@/components/dashboard/ExplorerListing"
 import { FileViewer } from "@/components/dashboard/FileViewer"
 import { FolderSidebar } from "@/components/dashboard/FolderSidebar"
+import { IconPickerDialog } from "@/components/dashboard/IconPickerDialog"
 import { RecycleBinListing } from "@/components/dashboard/RecycleBinListing"
 import { SearchResults } from "@/components/dashboard/SearchResults"
 import { SelectionToolbar } from "@/components/dashboard/SelectionToolbar"
@@ -36,6 +40,7 @@ import {
   mkdir,
   parentPath,
   searchArchive,
+  setNodeIcon,
   splitPath,
   type FsNode,
 } from "@/lib/vault/fs"
@@ -60,7 +65,7 @@ export function Dashboard() {
   const navigate = useNavigate()
 
   const rootFolders = useMemo(
-    () => (payload ? listRootDirs(payload).map((e) => e.name) : []),
+    () => (payload ? listRootDirs(payload) : []),
     [payload]
   )
 
@@ -78,8 +83,13 @@ export function Dashboard() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [confirmPurge, setConfirmPurge] = useState(false)
   const [selectionScope, setSelectionScope] = useState("")
+  const [iconEdit, setIconEdit] = useState<{
+    path: string
+    kind: "folder" | "file"
+    icon?: string
+  } | null>(null)
 
-  const resolvedPath = currentPath ?? rootFolders[0] ?? ""
+  const resolvedPath = currentPath ?? rootFolders[0]?.name ?? ""
   const scopeKey = `${viewMode}:${resolvedPath}:${searchQuery}`
   if (scopeKey !== selectionScope) {
     setSelectionScope(scopeKey)
@@ -139,17 +149,36 @@ export function Dashboard() {
     }
   }
 
-  async function createFolder(name: string) {
+  function openIconEditor(path: string, node?: FsNode | null) {
+    const n = node ?? getNode(payload!, path)
+    if (!n) return
+    setIconEdit({
+      path,
+      kind: n.type === "dir" ? "folder" : "file",
+      icon: n.icon,
+    })
+  }
+
+  async function applyIcon(iconId: string) {
+    if (!iconEdit) return
+    const path = iconEdit.path
+    await commit((archive) => {
+      setNodeIcon(archive, path, iconId)
+    })
+    setIconEdit(null)
+  }
+
+  async function createFolder({ name, icon }: CreateNodeResult) {
     assertValidName(name)
     ensureUnique(name)
     const path = joinPath(createParent, name)
     await commit((archive) => {
-      mkdir(archive, path)
+      mkdir(archive, path, { icon })
     })
     navigateTo(path)
   }
 
-  async function createFile(rawName: string) {
+  async function createFile({ name: rawName, icon }: CreateNodeResult) {
     let name = rawName.trim()
     if (!name.includes(".")) {
       name = `${name}.json`
@@ -157,7 +186,7 @@ export function Dashboard() {
     assertValidName(name)
     ensureUnique(name)
     const path = joinPath(createParent, name)
-    await putEncryptedFile(path, {})
+    await putEncryptedFile(path, {}, { icon })
     navigateTo(path)
   }
 
@@ -208,7 +237,7 @@ export function Dashboard() {
                     href="#"
                     onClick={(e) => {
                       e.preventDefault()
-                      navigateTo(rootFolders[0] ?? "")
+                      navigateTo(rootFolders[0]?.name ?? "")
                     }}
                   >
                     Vault
@@ -369,11 +398,13 @@ export function Dashboard() {
               />
               <div className="min-h-0 flex-1 overflow-auto">
                 <SearchResults
+                  archive={payload}
                   hits={searchHits}
                   query={searchQuery.trim()}
                   selected={selected}
                   onToggle={toggleSelected}
                   onOpen={navigateTo}
+                  onChangeIcon={(path) => openIconEditor(path)}
                 />
               </div>
             </>
@@ -393,6 +424,7 @@ export function Dashboard() {
                   selected={selected}
                   onToggle={toggleSelected}
                   onOpen={openChild}
+                  onChangeIcon={(path, node) => openIconEditor(path, node)}
                 />
               </div>
             </>
@@ -421,6 +453,16 @@ export function Dashboard() {
         kind="file"
         busy={saving}
         onSubmit={createFile}
+      />
+      <IconPickerDialog
+        open={iconEdit !== null}
+        onOpenChange={(open) => {
+          if (!open) setIconEdit(null)
+        }}
+        value={iconEdit?.icon}
+        kind={iconEdit?.kind}
+        onSelect={(id) => void applyIcon(id)}
+        title="Change icon"
       />
       <ConfirmDialog
         open={confirmPurge}

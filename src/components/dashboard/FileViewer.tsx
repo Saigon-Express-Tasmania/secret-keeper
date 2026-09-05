@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
 
-import type { JsonValue } from "@/lib/vault/fs"
+import { NodeIcon } from "@/components/icons/NodeIcon"
 import { useVault } from "@/context/VaultContext"
+import type { JsonValue } from "@/lib/vault/fs"
+import {
+  formatNodeDate,
+  formatNodeSize,
+  getNode,
+  pathBasename,
+  resolveNodeIcon,
+} from "@/lib/vault/fs"
 
 type FileViewerProps = {
   path: string
@@ -14,8 +22,12 @@ type ViewState =
   | { status: "ready"; json: JsonValue }
 
 export function FileViewer({ path }: FileViewerProps) {
-  const { decryptFile } = useVault()
+  const { decryptFile, payload } = useVault()
   const [state, setState] = useState<ViewState>({ status: "loading" })
+
+  const node = payload ? getNode(payload, path) : null
+  const fileNode = node?.type === "file" ? node : null
+  const name = pathBasename(path)
 
   useEffect(() => {
     let cancelled = false
@@ -58,9 +70,28 @@ export function FileViewer({ path }: FileViewerProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b px-4 py-2 text-xs text-muted-foreground">
-        Decrypted for viewing only — plaintext is cleared when you leave this
-        file.
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-2 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2 text-foreground">
+          <NodeIcon
+            iconId={
+              fileNode ? resolveNodeIcon(fileNode, name) : undefined
+            }
+            kind="file"
+            size={18}
+          />
+          <span className="truncate font-medium">{name}</span>
+        </div>
+        <span>
+          Created {formatNodeDate(fileNode?.createdAt)}
+        </span>
+        <span>
+          Modified {formatNodeDate(fileNode?.modifiedAt)}
+        </span>
+        <span>{fileNode ? formatNodeSize(fileNode) : "—"}</span>
+        <span className="ml-auto">
+          Decrypted for viewing only — plaintext is cleared when you leave this
+          file.
+        </span>
       </div>
       <pre className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap">
         {JSON.stringify(state.json, null, 2)}

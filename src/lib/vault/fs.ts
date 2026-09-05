@@ -12,23 +12,31 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue }
 
+/** Per-node metadata (optional on legacy vaults until unlock backfill). */
+export type NodeMeta = {
+  createdAt: string
+  modifiedAt: string
+  /** Catalog id, e.g. `fluent-color:document-16`. */
+  icon?: string
+}
+
 /** Per-file ciphertext stored in the tree (AES-GCM under the file DEK). */
 export type FsFile = {
   type: "file"
   nonce: string
   ciphertext: string
-}
+} & Partial<NodeMeta>
 
 /** Legacy v2 plaintext file — only present during unlock migration. */
 export type PlaintextFsFile = {
   type: "file"
   json: JsonValue
-}
+} & Partial<NodeMeta>
 
 export type FsDir = {
   type: "dir"
   entries: Record<string, FsNode>
-}
+} & Partial<NodeMeta>
 
 export type FsNode = FsFile | FsDir
 
@@ -63,9 +71,20 @@ type LegacyFsNode = PlaintextFsFile | FsFile | LegacyFsDir
 type LegacyFsDir = {
   type: "dir"
   entries: Record<string, LegacyFsNode>
+} & Partial<NodeMeta>
+
+export const SEED_DIRS = ["passwords", "auth-keys", "wallets", "notes"] as const
+
+/** Default icons for seed root folders (catalog ids). */
+export const SEED_DIR_ICONS: Record<(typeof SEED_DIRS)[number], string> = {
+  passwords: "fluent-color:lock-closed-16",
+  "auth-keys": "fluent-color:shield-16",
+  wallets: "fluent-color:savings-16",
+  notes: "fluent-color:notebook-16",
 }
 
-const SEED_DIRS = ["passwords", "auth-keys", "wallets", "notes"] as const
+export const DEFAULT_FOLDER_ICON = "fluent-color:document-folder-16"
+export const DEFAULT_FILE_ICON = "fluent-color:document-16"
 
 export function assertValidName(name: string): void {
   if (
@@ -79,20 +98,49 @@ export function assertValidName(name: string): void {
   }
 }
 
-function emptyDir(): FsDir {
-  return { type: "dir", entries: {} }
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function emptyDir(meta?: Partial<NodeMeta>): FsDir {
+  const t = meta?.createdAt ?? nowIso()
+  return {
+    type: "dir",
+    entries: {},
+    createdAt: t,
+    modifiedAt: meta?.modifiedAt ?? t,
+    ...(meta?.icon ? { icon: meta.icon } : {}),
+  }
+}
+
+/** Copy optional metadata fields from a node. */
+export function copyNodeMeta(node: {
+  createdAt?: string
+  modifiedAt?: string
+  icon?: string
+}): Partial<NodeMeta> {
+  const out: Partial<NodeMeta> = {}
+  if (typeof node.createdAt === "string") out.createdAt = node.createdAt
+  if (typeof node.modifiedAt === "string") out.modifiedAt = node.modifiedAt
+  if (typeof node.icon === "string") out.icon = node.icon
+  return out
 }
 
 /** Create a new vault with the four starter folders (no DEK yet). */
 export function createEmptyArchive(): VaultArchive {
+  const t = nowIso()
   const entries: Record<string, FsNode> = {}
   for (const name of SEED_DIRS) {
-    entries[name] = emptyDir()
+    entries[name] = emptyDir({
+      createdAt: t,
+      modifiedAt: t,
+      icon: SEED_DIR_ICONS[name],
+    })
   }
   return {
     version: 3,
-    updatedAt: new Date().toISOString(),
-    root: { type: "dir", entries },
+    updatedAt: t,
+    root: { type: "dir", entries, createdAt: t, modifiedAt: t },
     recycleBin: [],
   }
 }
@@ -160,32 +208,48 @@ export function listRootDirs(
 }
 
 /** Ensure directory path exists (creates intermediate dirs). */
-export function mkdir(archive: VaultArchive, path: string): void {
+export function mkdir(
+  archive: VaultArchive,
+  path: string,
+  options?: { icon?: string }
+): void {
   const parts = splitPath(path)
   if (parts.length === 0) return
 
+  const t = nowIso()
   let dir = archive.root
-  for (const part of parts) {
+  let createdLeaf = false
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!
     assertValidName(part)
     const existing = dir.entries[part]
+    const isLeaf = i === parts.length - 1
     if (!existing) {
-      const created = emptyDir()
+      const created = emptyDir({
+        createdAt: t,
+        modifiedAt: t,
+        ...(isLeaf && options?.icon ? { icon: options.icon } : {}),
+      })
       dir.entries[part] = created
       dir = created
+      if (isLeaf) createdLeaf = true
     } else if (existing.type === "dir") {
       dir = existing
     } else {
       throw new Error(`Path component is a file: ${part}`)
     }
   }
-  archive.updatedAt = new Date().toISOString()
+  if (createdLeaf && options?.icon && dir.type === "dir") {
+    dir.icon = options.icon
+  }
+  archive.updatedAt = t
 }
 
 /** Write or overwrite an encrypted file at path (creates parent dirs). */
 export function putFile(
   archive: VaultArchive,
   path: string,
-  file: Omit<FsFile, "type">
+  file: Omit<FsFile, "type"> & { icon?: string }
 ): void {
   const parts = splitPath(path)
   if (parts.length === 0) {
@@ -204,15 +268,94 @@ export function putFile(
 
   const existing = parentNode.entries[fileName]
   if (existing && existing.type === "dir") {
-    throw new Error(`Cannot overwrite directory with file: ${path}`)
+    throw new Error(`Cannot overwrite directory with a file: ${path}`)
   }
+
+  const t = nowIso()
+  const createdAt =
+    existing && existing.type === "file" && existing.createdAt
+      ? existing.createdAt
+      : t
+  const icon =
+    file.icon ??
+    (existing && existing.type === "file" ? existing.icon : undefined)
 
   parentNode.entries[fileName] = {
     type: "file",
     nonce: file.nonce,
     ciphertext: file.ciphertext,
+    createdAt,
+    modifiedAt: t,
+    ...(icon ? { icon } : {}),
   }
-  archive.updatedAt = new Date().toISOString()
+  archive.updatedAt = t
+}
+
+/** Set (or clear) a node's icon and bump modifiedAt. */
+export function setNodeIcon(
+  archive: VaultArchive,
+  path: string,
+  iconId: string | undefined
+): void {
+  const node = getNode(archive, path)
+  if (!node) {
+    throw new Error(`Path not found: ${path}`)
+  }
+  const t = nowIso()
+  if (iconId) {
+    node.icon = iconId
+  } else {
+    delete node.icon
+  }
+  node.modifiedAt = t
+  if (!node.createdAt) node.createdAt = t
+  archive.updatedAt = t
+}
+
+/** Locale-friendly date for Details columns; missing → em dash. */
+export function formatNodeDate(iso: string | undefined): string {
+  if (!iso) return "—"
+  try {
+    return new Date(iso).toLocaleString()
+  } catch {
+    return iso
+  }
+}
+
+/** Human-readable size for files (ciphertext bytes) or folder item counts. */
+export function formatNodeSize(node: FsNode): string {
+  if (node.type === "dir") {
+    const n = Object.keys(node.entries).length
+    return n === 1 ? "1 item" : `${n} items`
+  }
+  try {
+    const binary = atob(node.ciphertext)
+    return formatByteSize(binary.length)
+  } catch {
+    return "—"
+  }
+}
+
+export function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export function nodeTypeLabel(node: FsNode): string {
+  return node.type === "dir" ? "Folder" : "JSON"
+}
+
+/** Resolve display icon id for a node (defaults by type / seed name). */
+export function resolveNodeIcon(
+  node: FsNode,
+  name?: string
+): string {
+  if (node.icon) return node.icon
+  if (node.type === "dir" && name && name in SEED_DIR_ICONS) {
+    return SEED_DIR_ICONS[name as (typeof SEED_DIRS)[number]]
+  }
+  return node.type === "dir" ? DEFAULT_FOLDER_ICON : DEFAULT_FILE_ICON
 }
 
 /** Remove a file or directory at path. */
@@ -328,17 +471,30 @@ export function withFileDek(
 export function isEncryptedFile(value: unknown): value is FsFile {
   if (!value || typeof value !== "object") return false
   const v = value as Record<string, unknown>
-  return (
-    v.type === "file" &&
-    typeof v.nonce === "string" &&
-    typeof v.ciphertext === "string"
-  )
+  if (
+    v.type !== "file" ||
+    typeof v.nonce !== "string" ||
+    typeof v.ciphertext !== "string"
+  ) {
+    return false
+  }
+  return hasValidOptionalMeta(v)
 }
 
 export function isPlaintextFile(value: unknown): value is PlaintextFsFile {
   if (!value || typeof value !== "object") return false
   const v = value as Record<string, unknown>
-  return v.type === "file" && "json" in v
+  if (v.type !== "file" || !("json" in v)) return false
+  return hasValidOptionalMeta(v)
+}
+
+function hasValidOptionalMeta(v: Record<string, unknown>): boolean {
+  if (v.createdAt !== undefined && typeof v.createdAt !== "string") return false
+  if (v.modifiedAt !== undefined && typeof v.modifiedAt !== "string") {
+    return false
+  }
+  if (v.icon !== undefined && typeof v.icon !== "string") return false
+  return true
 }
 
 function isRecycleBinEntry(value: unknown): value is RecycleBinEntry {
@@ -385,6 +541,7 @@ function isFsDir(value: unknown): value is FsDir {
   if (v.type !== "dir" || !v.entries || typeof v.entries !== "object") {
     return false
   }
+  if (!hasValidOptionalMeta(v)) return false
   for (const [name, child] of Object.entries(
     v.entries as Record<string, unknown>
   )) {
@@ -412,6 +569,7 @@ function isLegacyFsDir(value: unknown): value is LegacyFsDir {
   if (v.type !== "dir" || !v.entries || typeof v.entries !== "object") {
     return false
   }
+  if (!hasValidOptionalMeta(v)) return false
   for (const [name, child] of Object.entries(
     v.entries as Record<string, unknown>
   )) {
