@@ -13,10 +13,9 @@ import {
 import type { ExplorerClipboard } from "@/components/dashboard/ExplorerListing"
 import { ItemContextMenuItems } from "@/components/dashboard/ItemContextMenu"
 import {
+  CredentialStackCell,
   DECRYPT_LISTING_NOTICE,
-  OtpListingCell,
 } from "@/components/dashboard/ListingCredentialCells"
-import { SecretCell, UsernameCell } from "@/components/dashboard/SecretCell"
 import {
   toFileRefs,
   useListedAccounts,
@@ -60,9 +59,7 @@ type SearchResultsProps = {
 
 const COLUMNS = [
   { key: "name" as const, label: "Name" },
-  { key: "username" as const, label: "Username", sortable: false },
-  { key: "password" as const, label: "Password", sortable: false },
-  { key: "otp" as const, label: "OTP", sortable: false },
+  { key: "username" as const, label: "Credentials", sortable: false },
   { key: "modified" as const, label: "Date modified" },
   { key: "type" as const, label: "Type" },
   { key: "size" as const, label: "Size" },
@@ -162,7 +159,7 @@ export function SearchResults({
 
   if (hits.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-emerald-800/70">
         No matches for “{query}”.
       </div>
     )
@@ -182,7 +179,7 @@ export function SearchResults({
         }}
         leadingHeader={<span className="size-4" aria-hidden />}
       >
-        {sorted.map((hit) => {
+        {sorted.map((hit, index) => {
           const checked = selected.has(hit.path)
           const node = getNode(archive, hit.path)
           const iconId = node
@@ -201,9 +198,10 @@ export function SearchResults({
                 <ContextMenuTrigger asChild>
                   <div
                     className={cn(
-                      "grid items-start gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-accent/50",
+                      "grid items-start gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-emerald-50/80",
                       CREDENTIAL_SEARCH_GRID,
-                      checked && "bg-accent/30",
+                      index % 2 === 1 && !checked && "bg-emerald-50/35",
+                      checked && "bg-sky-100/70",
                       isCut && "opacity-50"
                     )}
                   >
@@ -218,7 +216,7 @@ export function SearchResults({
                     <div className="flex min-w-0 items-start gap-2">
                       <button
                         type="button"
-                        className="mt-0.5 shrink-0 rounded p-0.5 hover:bg-accent"
+                        className="mt-0.5 shrink-0 rounded p-0.5 hover:bg-emerald-100"
                         title="Change icon"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -234,7 +232,7 @@ export function SearchResults({
                       <button
                         type="button"
                         onClick={() => onOpen(hit.path)}
-                        className="min-w-0 flex-1 text-left"
+                        className="min-w-0 flex-1 text-left hover:text-emerald-800"
                       >
                         {isDir ? (
                           <>
@@ -281,30 +279,24 @@ export function SearchResults({
                       </button>
                     </div>
 
-                    {isDir || !decryptListing ? (
-                      <>
-                        <span className="text-xs text-muted-foreground">—</span>
-                        <span className="text-xs text-muted-foreground">—</span>
-                        <span className="text-xs text-muted-foreground">—</span>
-                      </>
-                    ) : loading ? (
-                      <>
-                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                      </>
-                    ) : (
-                      <>
-                        <UsernameCell value={account?.username ?? ""} />
-                        <SecretCell value={account?.password ?? ""} />
-                        <OtpListingCell account={account} tick={tick} />
-                      </>
-                    )}
+                    <CredentialStackCell
+                      account={account}
+                      tick={tick}
+                      loading={loading}
+                      available={!isDir && decryptListing}
+                    />
 
                     <span className="truncate text-xs text-muted-foreground tabular-nums">
                       {formatNodeDate(node?.modifiedAt)}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "w-fit truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        isDir
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-sky-100 text-sky-800"
+                      )}
+                    >
                       {node
                         ? nodeTypeLabel(node)
                         : hit.kind === "dir"

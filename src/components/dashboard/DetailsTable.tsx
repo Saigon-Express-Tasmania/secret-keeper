@@ -13,13 +13,13 @@ export type DetailsSortKey =
   | "password"
   | "otp"
 
-/** Wide explorer grid: checkbox + name + username + password + otp + meta. */
+/** Wide explorer grid: checkbox + name + credentials + meta. */
 export const CREDENTIAL_LISTING_GRID =
-  "grid-cols-[auto_minmax(12rem,2fr)_minmax(8rem,1fr)_minmax(9rem,1fr)_minmax(8rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_4.5rem_5rem] min-w-[56rem]"
+  "grid-cols-[auto_minmax(12rem,2fr)_minmax(13rem,1.4fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_4.5rem_5rem] min-w-[44rem]"
 
-/** Search listing grid (no date created): checkbox + name + creds + modified + type + size. */
+/** Search listing grid (no date created): checkbox + name + credentials + modified + type + size. */
 export const CREDENTIAL_SEARCH_GRID =
-  "grid-cols-[auto_minmax(12rem,2fr)_minmax(8rem,1fr)_minmax(9rem,1fr)_minmax(8rem,1fr)_minmax(7rem,1fr)_4.5rem_5rem] min-w-[48rem]"
+  "grid-cols-[auto_minmax(12rem,2fr)_minmax(13rem,1.4fr)_minmax(7rem,1fr)_4.5rem_5rem] min-w-[38rem]"
 
 export type SortDir = "asc" | "desc"
 
@@ -63,7 +63,7 @@ export function DetailsTable({
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div
         className={cn(
-          "sticky top-0 z-10 grid items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase",
+          "sticky top-0 z-10 grid items-center gap-2 border-b border-emerald-200/70 bg-gradient-to-r from-emerald-100/90 via-teal-50/80 to-sky-100/80 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-emerald-800 uppercase",
           grid
         )}
         role="row"
@@ -80,7 +80,7 @@ export function DetailsTable({
               onClick={() => sortable && onSort(col.key)}
               className={cn(
                 "flex min-w-0 items-center gap-1 truncate text-left",
-                sortable && "hover:text-foreground",
+                sortable && "hover:text-emerald-950",
                 !sortable && "cursor-default",
                 col.className
               )}
@@ -95,7 +95,7 @@ export function DetailsTable({
           )
         })}
       </div>
-      <ul className="divide-y">{children}</ul>
+      <ul className="divide-y divide-emerald-100/80">{children}</ul>
     </div>
   )
 }

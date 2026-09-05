@@ -166,13 +166,13 @@ export function AccountEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-emerald-200/70 bg-gradient-to-r from-emerald-50/95 to-sky-50/90 px-4 py-2 backdrop-blur">
         <span
           className={cn(
             "text-xs font-medium",
             dirty
               ? "text-amber-700 dark:text-amber-400"
-              : "text-muted-foreground"
+              : "text-emerald-700 dark:text-emerald-400"
           )}
         >
           {dirty ? "Unsaved changes" : "Saved"}
@@ -384,7 +384,7 @@ export function AccountEditor({
         <EditorSection
           title="Notes"
           description="Free-form notes"
-          tone="slate"
+          tone="rose"
           defaultOpen={false}
         >
           <Textarea

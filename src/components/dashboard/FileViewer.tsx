@@ -79,7 +79,7 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
 
   if (state.status === "loading") {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center gap-2 p-8 text-sm text-sky-800">
         <Loader2 className="size-4 animate-spin" />
         Decrypting…
       </div>
@@ -96,8 +96,8 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-2 text-xs text-muted-foreground">
-        <div className="flex min-w-0 items-center gap-2 text-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-sky-200/70 bg-gradient-to-r from-sky-50/90 to-emerald-50/70 px-4 py-2 text-xs text-sky-800">
+        <div className="flex min-w-0 items-center gap-2 text-sky-950">
           <NodeIcon
             iconId={
               fileNode ? resolveNodeIcon(fileNode, name) : undefined

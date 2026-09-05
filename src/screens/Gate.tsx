@@ -13,6 +13,11 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  APP_BG_CREDIT_HREF,
+  APP_BG_CREDIT_LABEL,
+  AppBackdrop,
+} from "@/components/AppBackdrop"
 import { useVault } from "@/context/VaultContext"
 
 export function Gate() {
@@ -39,8 +44,9 @@ export function Gate() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
+    <main className="relative flex min-h-svh items-center justify-center overflow-hidden p-4">
+      <AppBackdrop priority />
+      <Card className="relative w-full max-w-sm border-white/25 bg-card/90 shadow-2xl backdrop-blur-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="size-5" />
@@ -85,6 +91,14 @@ export function Gate() {
           </CardFooter>
         </form>
       </Card>
+      <a
+        href={APP_BG_CREDIT_HREF}
+        className="absolute right-3 bottom-3 text-xs text-white/70 underline-offset-2 hover:text-white hover:underline"
+        target="_blank"
+        rel="noreferrer"
+      >
+        {APP_BG_CREDIT_LABEL}
+      </a>
     </main>
   )
 }

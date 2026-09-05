@@ -22,8 +22,8 @@ export function SelectionToolbar({
   if (count === 0) return null
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
-      <span className="text-sm text-muted-foreground">
+    <div className="flex shrink-0 items-center gap-2 border-b border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2">
+      <span className="text-sm font-medium text-amber-900">
         {count} selected
       </span>
       <div className="ml-auto flex items-center gap-2">

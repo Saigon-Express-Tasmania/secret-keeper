@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 
-export type SectionTone = "sky" | "amber" | "emerald" | "violet" | "slate"
+export type SectionTone = "sky" | "amber" | "emerald" | "violet" | "rose"
 
 const TONE_STYLES: Record<
   SectionTone,
@@ -42,12 +42,12 @@ const TONE_STYLES: Record<
     body: "border-t border-violet-100 bg-violet-50/40 dark:border-violet-900 dark:bg-violet-950/20",
     chevron: "text-violet-600 dark:text-violet-400",
   },
-  slate: {
-    border: "border-slate-200 dark:border-slate-700",
+  rose: {
+    border: "border-rose-200 dark:border-rose-800",
     header:
-      "bg-slate-50 text-slate-950 hover:bg-slate-100/80 dark:bg-slate-900/50 dark:text-slate-50 dark:hover:bg-slate-900/70",
-    body: "border-t border-slate-100 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/30",
-    chevron: "text-slate-500 dark:text-slate-400",
+      "bg-rose-50 text-rose-950 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:text-rose-50 dark:hover:bg-rose-950/60",
+    body: "border-t border-rose-100 bg-rose-50/40 dark:border-rose-900 dark:bg-rose-950/20",
+    chevron: "text-rose-600 dark:text-rose-400",
   },
 }
 
@@ -56,7 +56,7 @@ const ACCENT_BAR: Record<SectionTone, string> = {
   amber: "bg-amber-500",
   emerald: "bg-emerald-500",
   violet: "bg-violet-500",
-  slate: "bg-slate-500",
+  rose: "bg-rose-500",
 }
 
 type EditorSectionProps = {

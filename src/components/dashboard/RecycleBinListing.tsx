@@ -76,7 +76,7 @@ export function RecycleBinListing({
 
   if (entries.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-rose-800/70">
         Recycle Bin is empty.
       </div>
     )
@@ -94,7 +94,7 @@ export function RecycleBinListing({
       }}
       leadingHeader={<span className="size-4" aria-hidden />}
     >
-      {sorted.map((entry) => {
+      {sorted.map((entry, index) => {
         const isDir = entry.node.type === "dir"
         const name = pathBasename(entry.originalPath)
         const checked = selected.has(entry.id)
@@ -104,9 +104,10 @@ export function RecycleBinListing({
           <li key={entry.id}>
             <div
               className={cn(
-                "grid items-center gap-2 px-3 py-1.5 text-sm transition-colors hover:bg-accent/50",
+                "grid items-center gap-2 px-3 py-1.5 text-sm transition-colors hover:bg-rose-50/80",
                 "grid-cols-[auto_minmax(10rem,2fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_4.5rem_5rem]",
-                checked && "bg-accent/30"
+                index % 2 === 1 && !checked && "bg-rose-50/40",
+                checked && "bg-rose-100/70"
               )}
             >
               <input
@@ -135,7 +136,14 @@ export function RecycleBinListing({
               <span className="truncate text-xs text-muted-foreground tabular-nums">
                 {formatNodeDate(entry.node.modifiedAt)}
               </span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span
+                className={cn(
+                  "w-fit truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                  isDir
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-sky-100 text-sky-800"
+                )}
+              >
                 {nodeTypeLabel(entry.node)}
               </span>
               <span className="truncate text-xs text-muted-foreground tabular-nums">

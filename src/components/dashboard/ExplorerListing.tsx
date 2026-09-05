@@ -14,10 +14,9 @@ import {
   ItemContextMenuItems,
   PasteOnlyMenuItems,
 } from "@/components/dashboard/ItemContextMenu"
-import { SecretCell, UsernameCell } from "@/components/dashboard/SecretCell"
 import {
+  CredentialStackCell,
   DECRYPT_LISTING_NOTICE,
-  OtpListingCell,
 } from "@/components/dashboard/ListingCredentialCells"
 import {
   toFileRefs,
@@ -68,9 +67,7 @@ type ExplorerListingProps = {
 
 const COLUMNS = [
   { key: "name" as const, label: "Name" },
-  { key: "username" as const, label: "Username", sortable: false },
-  { key: "password" as const, label: "Password", sortable: false },
-  { key: "otp" as const, label: "OTP", sortable: false },
+  { key: "username" as const, label: "Credentials", sortable: false },
   { key: "modified" as const, label: "Date modified" },
   { key: "created" as const, label: "Date created" },
   { key: "type" as const, label: "Type" },
@@ -164,7 +161,7 @@ export function ExplorerListing({
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          <div className="flex flex-1 items-center justify-center p-8 text-sm text-emerald-800/70">
             This folder is empty.
           </div>
         </ContextMenuTrigger>
@@ -190,7 +187,7 @@ export function ExplorerListing({
         }}
         leadingHeader={<span className="size-4" aria-hidden />}
       >
-        {sorted.map(({ name, node }) => {
+        {sorted.map(({ name, node }, index) => {
           const isDir = node.type === "dir"
           const path = pathFor(name)
           const checked = selected.has(path)
@@ -207,9 +204,10 @@ export function ExplorerListing({
                 <ContextMenuTrigger asChild>
                   <div
                     className={cn(
-                      "grid items-start gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-accent/50",
+                      "grid items-start gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-emerald-50/80",
                       CREDENTIAL_LISTING_GRID,
-                      checked && "bg-accent/30",
+                      index % 2 === 1 && !checked && "bg-emerald-50/35",
+                      checked && "bg-sky-100/70",
                       isCut && "opacity-50"
                     )}
                   >
@@ -224,7 +222,7 @@ export function ExplorerListing({
                     <div className="flex min-w-0 items-start gap-2">
                       <button
                         type="button"
-                        className="mt-0.5 shrink-0 rounded p-0.5 hover:bg-accent"
+                        className="mt-0.5 shrink-0 rounded p-0.5 hover:bg-emerald-100"
                         title="Change icon"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -240,7 +238,7 @@ export function ExplorerListing({
                       <button
                         type="button"
                         onClick={() => onOpen(name, node)}
-                        className="min-w-0 flex-1 text-left"
+                        className="min-w-0 flex-1 text-left hover:text-emerald-800"
                       >
                         {isDir ? (
                           <div className="truncate font-medium">{name}</div>
@@ -278,29 +276,12 @@ export function ExplorerListing({
                       </button>
                     </div>
 
-                    {isDir || !decryptListing ? (
-                      <>
-                        <span className="text-xs text-muted-foreground">—</span>
-                        <span className="text-xs text-muted-foreground">—</span>
-                        <span className="text-xs text-muted-foreground">—</span>
-                      </>
-                    ) : loading ? (
-                      <>
-                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                      </>
-                    ) : (
-                      <>
-                        <UsernameCell value={account?.username ?? ""} />
-                        <SecretCell value={account?.password ?? ""} />
-                        <OtpListingCell
-                          account={account}
-                          tick={tick}
-                          loading={false}
-                        />
-                      </>
-                    )}
+                    <CredentialStackCell
+                      account={account}
+                      tick={tick}
+                      loading={loading}
+                      available={!isDir && decryptListing}
+                    />
 
                     <span className="truncate text-xs text-muted-foreground tabular-nums">
                       {formatNodeDate(node.modifiedAt)}
@@ -308,7 +289,14 @@ export function ExplorerListing({
                     <span className="truncate text-xs text-muted-foreground tabular-nums">
                       {formatNodeDate(node.createdAt)}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "w-fit truncate rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        isDir
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-sky-100 text-sky-800"
+                      )}
+                    >
                       {nodeTypeLabel(node)}
                     </span>
                     <span className="truncate text-xs text-muted-foreground tabular-nums">

@@ -47,13 +47,13 @@ export function FolderSidebar({
     clipboard?.mode === "cut" ? new Set(clipboard.paths) : new Set<string>()
 
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-r bg-muted/30">
-      <div className="border-b px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+    <aside className="flex w-52 shrink-0 flex-col border-r border-emerald-200/70 bg-emerald-50/75 backdrop-blur-md">
+      <div className="border-b border-emerald-200/70 bg-gradient-to-r from-emerald-600 to-teal-500 px-3 py-2 text-xs font-semibold tracking-wide text-white uppercase">
         Folders
       </div>
       <nav className="flex-1 overflow-y-auto p-2">
         {folders.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">
+          <p className="px-2 py-3 text-xs text-emerald-800/70">
             No folders yet.
           </p>
         ) : (
@@ -69,10 +69,10 @@ export function FolderSidebar({
                         type="button"
                         onClick={() => onSelectFolder(name)}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
                           active
-                            ? "bg-accent font-medium text-accent-foreground"
-                            : "hover:bg-accent/60",
+                            ? "bg-emerald-600 font-medium text-white shadow-sm shadow-emerald-700/20"
+                            : "text-emerald-950 hover:bg-emerald-100/90",
                           isCut && "opacity-50"
                         )}
                       >
@@ -101,21 +101,33 @@ export function FolderSidebar({
         )}
       </nav>
 
-      <div className="border-t p-2">
+      <div className="border-t border-emerald-200/70 p-2">
         <button
           type="button"
           onClick={onSelectRecycleBin}
           className={cn(
-            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+            "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
             view === "recycle-bin"
-              ? "bg-accent font-medium text-accent-foreground"
-              : "hover:bg-accent/60"
+              ? "bg-rose-600 font-medium text-white shadow-sm shadow-rose-700/20"
+              : "text-rose-800 hover:bg-rose-50"
           )}
         >
-          <Trash2 className="size-4 shrink-0 text-muted-foreground" />
+          <Trash2
+            className={cn(
+              "size-4 shrink-0",
+              view === "recycle-bin" ? "text-white" : "text-rose-500"
+            )}
+          />
           <span className="truncate">Recycle Bin</span>
           {recycleBinCount > 0 ? (
-            <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span
+              className={cn(
+                "ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums",
+                view === "recycle-bin"
+                  ? "bg-white/25 text-white"
+                  : "bg-rose-100 text-rose-800"
+              )}
+            >
               {recycleBinCount}
             </span>
           ) : null}

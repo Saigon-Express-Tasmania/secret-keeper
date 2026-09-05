@@ -8,6 +8,7 @@ import {
   Search,
 } from "lucide-react"
 
+import { AppBackdrop } from "@/components/AppBackdrop"
 import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog"
 import {
   CreateNodeDialog,
@@ -396,15 +397,23 @@ export function Dashboard() {
   const showCreate = !inBin && !isSearching
 
   return (
-    <div className="flex h-svh flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-3">
+    <div className="relative flex h-svh flex-col overflow-hidden">
+      <AppBackdrop blurred />
+      <header className="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b border-emerald-200/70 bg-gradient-to-r from-emerald-50/90 via-white/70 to-sky-50/80 px-3 shadow-sm shadow-emerald-900/5 backdrop-blur-md">
+        <div className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-2 py-1 text-white shadow-sm shadow-emerald-700/30">
+          <LockKeyhole className="size-3.5" />
+          <span className="hidden text-xs font-semibold tracking-wide sm:inline">
+            Keep
+          </span>
+        </div>
         <Breadcrumb className="min-w-0 flex-1">
-          <BreadcrumbList>
+          <BreadcrumbList className="text-emerald-700/80">
             <BreadcrumbItem>
               {inBin || segments.length === 0 ? (
                 inBin ? (
                   <BreadcrumbLink
                     href="#"
+                    className="text-emerald-700 hover:text-emerald-900"
                     onClick={(e) => {
                       e.preventDefault()
                       navigateTo(rootFolders[0]?.name ?? "")
@@ -413,11 +422,14 @@ export function Dashboard() {
                     Vault
                   </BreadcrumbLink>
                 ) : (
-                  <BreadcrumbPage>Vault</BreadcrumbPage>
+                  <BreadcrumbPage className="font-semibold text-emerald-800">
+                    Vault
+                  </BreadcrumbPage>
                 )
               ) : (
                 <BreadcrumbLink
                   href="#"
+                  className="text-emerald-700 hover:text-emerald-900"
                   onClick={(e) => {
                     e.preventDefault()
                     navigateTo("")
@@ -431,7 +443,9 @@ export function Dashboard() {
               <>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Recycle Bin</BreadcrumbPage>
+                  <BreadcrumbPage className="font-semibold text-rose-800">
+                    Recycle Bin
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             ) : (
@@ -443,13 +457,13 @@ export function Dashboard() {
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
                       {isLast ? (
-                        <BreadcrumbPage className="max-w-[12rem] truncate">
+                        <BreadcrumbPage className="max-w-[12rem] truncate font-semibold text-emerald-800">
                           {seg}
                         </BreadcrumbPage>
                       ) : (
                         <BreadcrumbLink
                           href="#"
-                          className="max-w-[10rem] truncate"
+                          className="max-w-[10rem] truncate text-emerald-700 hover:text-emerald-900"
                           onClick={(e) => {
                             e.preventDefault()
                             navigateTo(path)
@@ -468,12 +482,12 @@ export function Dashboard() {
 
         {!inBin ? (
           <div className="relative w-48 sm:w-56">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-emerald-600" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQueryGuarded(e.target.value)}
               placeholder="Search name or folder…"
-              className="pl-8"
+              className="border-emerald-200/80 bg-white/80 pl-8 focus-visible:ring-emerald-400"
               aria-label="Search files and folders"
             />
           </div>
@@ -482,12 +496,12 @@ export function Dashboard() {
         {!inBin ? (
           <label
             htmlFor="decrypt-listing"
-            className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+            className="flex cursor-pointer items-center gap-2 text-sm text-emerald-800"
           >
             <input
               id="decrypt-listing"
               type="checkbox"
-              className="size-4 rounded border-input"
+              className="size-4 rounded border-emerald-300 accent-emerald-600"
               checked={decryptListing}
               onChange={(e) => {
                 const next = e.target.checked
@@ -505,26 +519,31 @@ export function Dashboard() {
         {showCreate ? (
           <>
             <Button
-              variant="outline"
               size="sm"
               onClick={() => setCreateKind("folder")}
               disabled={saving}
+              className="bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
             >
               <FolderPlus />
               <span className="hidden sm:inline">New folder</span>
             </Button>
             <Button
-              variant="outline"
               size="sm"
               onClick={() => setCreateKind("file")}
               disabled={saving}
+              className="bg-sky-600 text-white shadow-sm hover:bg-sky-700"
             >
               <FilePlus />
               <span className="hidden sm:inline">New file</span>
             </Button>
           </>
         ) : null}
-        <Button variant="outline" size="sm" onClick={handleLock}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLock}
+          className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 hover:text-amber-950"
+        >
           <LockKeyhole />
           Lock
         </Button>
@@ -532,7 +551,7 @@ export function Dashboard() {
 
       {saveError ? (
         <div
-          className="border-b bg-destructive/10 px-4 py-2 text-sm text-destructive"
+          className="relative z-10 border-b bg-destructive/10 px-4 py-2 text-sm text-destructive"
           role="alert"
         >
           {saveError}
@@ -540,12 +559,12 @@ export function Dashboard() {
       ) : null}
 
       {saving ? (
-        <div className="border-b bg-muted/50 px-4 py-1.5 text-xs text-muted-foreground">
+        <div className="relative z-10 border-b border-sky-200 bg-sky-50 px-4 py-1.5 text-xs text-sky-800">
           Saving vault…
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative z-10 flex min-h-0 flex-1">
         <FolderSidebar
           folders={rootFolders}
           activeRoot={activeRoot}
@@ -562,7 +581,7 @@ export function Dashboard() {
           onChangeIcon={(path) => openIconEditor(path)}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white/55">
           {inBin ? (
             <>
               <SelectionToolbar
@@ -576,6 +595,7 @@ export function Dashboard() {
                   size="sm"
                   onClick={() => void handleRestore()}
                   disabled={saving || selected.size === 0}
+                  className="border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
                 >
                   <RotateCcw />
                   Restore
@@ -648,7 +668,7 @@ export function Dashboard() {
               </div>
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+            <div className="flex flex-1 items-center justify-center p-8 text-sm text-emerald-800/70">
               Path not found.
             </div>
           )}
