@@ -377,6 +377,241 @@ export function removeNode(archive: VaultArchive, path: string): boolean {
   return true
 }
 
+/** Deep-clone a file or folder tree (ciphertext preserved). */
+export function cloneNode(node: FsNode): FsNode {
+  return structuredClone(node)
+}
+
+/**
+ * Insert a cloned node at path. Creates parent dirs if needed.
+ * Fails if the destination path already exists.
+ */
+export function placeNode(
+  archive: VaultArchive,
+  path: string,
+  node: FsNode
+): void {
+  const parts = splitPath(path)
+  if (parts.length === 0) {
+    throw new Error("Cannot place node at vault root path.")
+  }
+  const name = parts[parts.length - 1]!
+  assertValidName(name)
+  const parent = parts.slice(0, -1).join("/")
+  if (parent) mkdir(archive, parent)
+
+  const parentNode = parent ? getNode(archive, parent) : archive.root
+  if (!parentNode || parentNode.type !== "dir") {
+    throw new Error(`Parent is not a directory: ${parent || "/"}`)
+  }
+  if (name in parentNode.entries) {
+    throw new Error(`Path already exists: ${path}`)
+  }
+  parentNode.entries[name] = cloneNode(node)
+  archive.updatedAt = nowIso()
+}
+
+/**
+ * Pick a free sibling name under parent when `name` is taken.
+ * e.g. `foo.json` + "copy" → `foo (copy).json`, `foo (copy 2).json`, …
+ * Returns `joinPath(parent, name)` when free.
+ */
+export function uniqueSiblingPath(
+  archive: VaultArchive,
+  parent: string,
+  name: string,
+  suffix: string
+): string {
+  assertValidName(name)
+  const first = joinPath(parent, name)
+  if (!getNode(archive, first)) return first
+
+  const lastDot = name.lastIndexOf(".")
+  const hasExt = lastDot > 0
+  const stem = hasExt ? name.slice(0, lastDot) : name
+  const ext = hasExt ? name.slice(lastDot) : ""
+
+  let candidate = joinPath(parent, `${stem} (${suffix})${ext}`)
+  let n = 2
+  while (getNode(archive, candidate)) {
+    candidate = joinPath(parent, `${stem} (${suffix} ${n})${ext}`)
+    n++
+  }
+  return candidate
+}
+
+/** Drop paths that are under another selected path (parent wins). */
+export function pruneDescendantPaths(paths: string[]): string[] {
+  const normalized = [
+    ...new Set(
+      paths
+        .map((p) => p.replace(/^\/+|\/+$/g, ""))
+        .filter((p) => p.length > 0)
+    ),
+  ].sort((a, b) => a.length - b.length || a.localeCompare(b))
+
+  const kept: string[] = []
+  for (const path of normalized) {
+    const covered = kept.some(
+      (parent) => path === parent || path.startsWith(`${parent}/`)
+    )
+    if (!covered) kept.push(path)
+  }
+  return kept
+}
+
+/** True if path equals or is under any of the given prefixes. */
+export function pathIsUnderAny(path: string, prefixes: string[]): boolean {
+  return prefixes.some((p) => path === p || path.startsWith(`${p}/`))
+}
+
+/**
+ * Rename a node within its parent directory.
+ * Returns the new full path.
+ */
+export function renameNode(
+  archive: VaultArchive,
+  path: string,
+  newName: string
+): string {
+  const parts = splitPath(path)
+  if (parts.length === 0) {
+    throw new Error("Cannot rename the vault root.")
+  }
+  assertValidName(newName)
+  const oldName = parts[parts.length - 1]!
+  if (oldName === newName) return path
+
+  const parent = parts.slice(0, -1).join("/")
+  const parentNode = parent ? getNode(archive, parent) : archive.root
+  if (!parentNode || parentNode.type !== "dir") {
+    throw new Error(`Parent is not a directory: ${parent || "/"}`)
+  }
+  const node = parentNode.entries[oldName]
+  if (!node) {
+    throw new Error(`Path not found: ${path}`)
+  }
+  if (newName in parentNode.entries) {
+    throw new Error(`“${newName}” already exists here.`)
+  }
+
+  delete parentNode.entries[oldName]
+  parentNode.entries[newName] = node
+  const t = nowIso()
+  node.modifiedAt = t
+  if (!node.createdAt) node.createdAt = t
+  archive.updatedAt = t
+  return joinPath(parent, newName)
+}
+
+/**
+ * Deep-copy source paths into destDir (ciphertext preserved).
+ * Collision names get a "(copy)" suffix. Returns destination paths.
+ */
+export function copyNodes(
+  archive: VaultArchive,
+  sourcePaths: string[],
+  destDir: string
+): string[] {
+  const targets = pruneDescendantPaths(sourcePaths)
+  if (targets.length === 0) return []
+
+  const destNode = destDir === "" ? archive.root : getNode(archive, destDir)
+  if (!destNode || destNode.type !== "dir") {
+    throw new Error(`Not a directory: ${destDir || "/"}`)
+  }
+
+  const placed: string[] = []
+  const t = nowIso()
+
+  for (const source of targets) {
+    if (splitPath(source).length === 0) {
+      throw new Error("Cannot copy the vault root.")
+    }
+    // Refuse copying a folder into itself or a descendant
+    if (
+      destDir === source ||
+      (destDir.startsWith(`${source}/`) && source.length > 0)
+    ) {
+      throw new Error(`Cannot paste into itself or a subfolder: ${source}`)
+    }
+    const node = getNode(archive, source)
+    if (!node) {
+      throw new Error(`Path not found: ${source}`)
+    }
+    const base = pathBasename(source)
+    const destPath = uniqueSiblingPath(archive, destDir, base, "copy")
+    const copy = cloneNode(node)
+    copy.modifiedAt = t
+    if (!copy.createdAt) copy.createdAt = t
+    placeNode(archive, destPath, copy)
+    placed.push(destPath)
+  }
+
+  archive.updatedAt = t
+  return placed
+}
+
+/**
+ * Move source paths into destDir. No-op when already at that path.
+ * Returns destination paths. Refuses moving a folder into itself/descendant.
+ */
+export function moveNodes(
+  archive: VaultArchive,
+  sourcePaths: string[],
+  destDir: string
+): string[] {
+  const targets = pruneDescendantPaths(sourcePaths)
+  if (targets.length === 0) return []
+
+  const destNode = destDir === "" ? archive.root : getNode(archive, destDir)
+  if (!destNode || destNode.type !== "dir") {
+    throw new Error(`Not a directory: ${destDir || "/"}`)
+  }
+
+  const moved: string[] = []
+  const t = nowIso()
+
+  for (const source of targets) {
+    if (splitPath(source).length === 0) {
+      throw new Error("Cannot move the vault root.")
+    }
+    if (
+      destDir === source ||
+      (destDir.startsWith(`${source}/`) && source.length > 0)
+    ) {
+      throw new Error(`Cannot paste into itself or a subfolder: ${source}`)
+    }
+
+    const parent = parentPath(source)
+    const base = pathBasename(source)
+
+    // Already in dest with same name — no-op
+    if (parent === destDir) {
+      moved.push(source)
+      continue
+    }
+
+    const node = getNode(archive, source)
+    if (!node) {
+      throw new Error(`Path not found: ${source}`)
+    }
+
+    const destPath = uniqueSiblingPath(archive, destDir, base, "copy")
+    const clone = cloneNode(node)
+    clone.modifiedAt = t
+    if (!clone.createdAt) clone.createdAt = t
+    // Remove first so a same-name collision in dest is handled correctly when
+    // source was not under dest; then place.
+    removeNode(archive, source)
+    placeNode(archive, destPath, clone)
+    moved.push(destPath)
+  }
+
+  archive.updatedAt = t
+  return moved
+}
+
 function walk(
   node: FsNode,
   visit: (n: FsNode) => void

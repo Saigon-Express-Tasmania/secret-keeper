@@ -4,48 +4,28 @@
  */
 
 import {
+  cloneNode,
   getNode,
-  joinPath,
-  mkdir,
   parentPath,
   pathBasename,
+  pathIsUnderAny,
+  placeNode,
+  pruneDescendantPaths,
   removeNode,
   splitPath,
+  uniqueSiblingPath,
   type FsDir,
-  type FsNode,
   type RecycleBinEntry,
   type VaultArchive,
 } from "@/lib/vault/fs"
+
+export { pathIsUnderAny, pruneDescendantPaths }
 
 function ensureBin(archive: VaultArchive): RecycleBinEntry[] {
   if (!archive.recycleBin) {
     archive.recycleBin = []
   }
   return archive.recycleBin
-}
-
-function cloneNode(node: FsNode): FsNode {
-  return structuredClone(node)
-}
-
-/** Drop paths that are under another selected path (parent wins). */
-export function pruneDescendantPaths(paths: string[]): string[] {
-  const normalized = [
-    ...new Set(
-      paths
-        .map((p) => p.replace(/^\/+|\/+$/g, ""))
-        .filter((p) => p.length > 0)
-    ),
-  ].sort((a, b) => a.length - b.length || a.localeCompare(b))
-
-  const kept: string[] = []
-  for (const path of normalized) {
-    const covered = kept.some(
-      (parent) => path === parent || path.startsWith(`${parent}/`)
-    )
-    if (!covered) kept.push(path)
-  }
-  return kept
 }
 
 export function listRecycleBin(archive: VaultArchive): RecycleBinEntry[] {
@@ -91,29 +71,6 @@ export function moveToRecycleBin(
   return created
 }
 
-function placeNode(
-  archive: VaultArchive,
-  path: string,
-  node: FsNode
-): void {
-  const parts = splitPath(path)
-  if (parts.length === 0) {
-    throw new Error("Cannot restore to vault root path.")
-  }
-  const name = parts[parts.length - 1]!
-  const parent = parts.slice(0, -1).join("/")
-  if (parent) mkdir(archive, parent)
-
-  const parentNode = parent ? getNode(archive, parent) : archive.root
-  if (!parentNode || parentNode.type !== "dir") {
-    throw new Error(`Parent is not a directory: ${parent || "/"}`)
-  }
-  if (name in parentNode.entries) {
-    throw new Error(`Path already exists: ${path}`)
-  }
-  parentNode.entries[name] = cloneNode(node)
-}
-
 /**
  * Pick a free path under the original parent when originalPath is taken.
  * e.g. `notes/foo` → `notes/foo (restored)`, `notes/foo (restored 2)`, …
@@ -123,22 +80,12 @@ export function uniqueRestorePath(
   originalPath: string
 ): string {
   if (!getNode(archive, originalPath)) return originalPath
-
-  const parent = parentPath(originalPath)
-  const base = pathBasename(originalPath)
-  // Split extension for files like github.json → "github (restored).json"
-  const lastDot = base.lastIndexOf(".")
-  const hasExt = lastDot > 0
-  const stem = hasExt ? base.slice(0, lastDot) : base
-  const ext = hasExt ? base.slice(lastDot) : ""
-
-  let candidate = joinPath(parent, `${stem} (restored)${ext}`)
-  let n = 2
-  while (getNode(archive, candidate)) {
-    candidate = joinPath(parent, `${stem} (restored ${n})${ext}`)
-    n++
-  }
-  return candidate
+  return uniqueSiblingPath(
+    archive,
+    parentPath(originalPath),
+    pathBasename(originalPath),
+    "restored"
+  )
 }
 
 /** Restore bin entries by id; returns restored paths. */
@@ -177,13 +124,6 @@ export function purgeRecycleBin(
   archive.recycleBin = bin.filter((e) => !idSet.has(e.id))
   archive.updatedAt = new Date().toISOString()
   return before - (archive.recycleBin?.length ?? 0)
-}
-
-/** True if path equals or is under any of the given prefixes. */
-export function pathIsUnderAny(path: string, prefixes: string[]): boolean {
-  return prefixes.some(
-    (p) => path === p || path.startsWith(`${p}/`)
-  )
 }
 
 export type { RecycleBinEntry, FsDir }

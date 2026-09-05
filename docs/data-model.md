@@ -58,63 +58,114 @@ Unlock migrates legacy **v2** archives (`{ type: "file", json: … }`) by genera
 
 ## Recommended inner file shapes
 
-These shapes are the **recommended** decrypted contents of JSON files under the starter folders. The archive layer does not enforce them.
+These shapes are the **recommended** decrypted contents of JSON files. The archive layer does not enforce them. New files are seeded as `type: "account"`. The editor maps empty `{}` and older shapes into this form on open.
 
-### Shared fields
+### Account (`type: "account"`) — default for all new files
+
+KeePass-style login / service secret. One account per file.
 
 ```ts
-type VaultItemBase = {
+type OtpSettings = {
+  type: "totp" | "hotp"
+  secret: string // Base32
+  algorithm: "SHA1" | "SHA256" | "SHA512"
+  digits: 6 | 7 | 8
+  period: number // TOTP seconds, default 30
+  counter: number // HOTP, default 0
+  issuer: string
+  label: string
+}
+
+type AccountEntry = {
+  type: "account"
   id: string // uuid
   title: string
-  tags?: string[]
+  description: string
+  username: string
+  password: string
+  url: string
+  recoveryEmail: string
+  recoveryKeys: string[]
+  notes: string
+  otp: OtpSettings | null
   createdAt: string
   updatedAt: string
-  notes?: string // free-form side note on any item
+  extra?: Record<string, JsonValue> // preserved unknown keys
 }
 ```
 
-### Password (`type: "password"`) — typically under `passwords/`
+### Legacy shapes (still accepted on open)
+
+Older recommended types are migrated into `AccountEntry` when opened in the editor. Saving rewrites the file as `type: "account"`.
+
+#### Password (`type: "password"`)
 
 ```ts
-type PasswordItem = VaultItemBase & {
+type PasswordItem = {
   type: "password"
+  id: string
+  title: string
   username?: string
   password: string
   url?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
 }
 ```
 
-### Auth key (`type: "auth_key"`) — typically under `auth-keys/`
+#### Auth key (`type: "auth_key"`)
 
 ```ts
-type AuthKeyItem = VaultItemBase & {
+type AuthKeyItem = {
   type: "auth_key"
+  id: string
+  title: string
   kind?: "api" | "ssh" | "totp" | "recovery" | "other"
   secret: string
   issuer?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
 }
 ```
 
-### Wallet (`type: "wallet"`) — typically under `wallets/`
+`kind: "totp"` / `"hotp"` maps into `otp`. Other kinds map `secret` into password or recovery keys.
+
+#### Wallet (`type: "wallet"`)
 
 ```ts
-type WalletItem = VaultItemBase & {
+type WalletItem = {
   type: "wallet"
-  network?: string // e.g. bitcoin, ethereum, solana
+  id: string
+  title: string
+  network?: string
   address?: string
   privateKey?: string
   seedPhrase?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
 }
 ```
 
-### Note (`type: "note"`) — typically under `notes/`
+(Wallet-specific fields land in `extra` / notes until a dedicated wallet editor exists.)
+
+#### Note (`type: "note"`)
 
 ```ts
-type NoteItem = VaultItemBase & {
+type NoteItem = {
   type: "note"
+  id: string
+  title: string
   body: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
 }
 ```
+
+`body` maps into `notes`.
 
 ## Pack + encrypt pipeline
 

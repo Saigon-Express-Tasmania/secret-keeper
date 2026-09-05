@@ -1,6 +1,16 @@
-import { useEffect, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react"
 import { Loader2 } from "lucide-react"
 
+import {
+  AccountEditor,
+  type AccountEditorHandle,
+} from "@/components/editor/AccountEditor"
 import { NodeIcon } from "@/components/icons/NodeIcon"
 import { useVault } from "@/context/VaultContext"
 import type { JsonValue } from "@/lib/vault/fs"
@@ -14,6 +24,7 @@ import {
 
 type FileViewerProps = {
   path: string
+  editorRef?: MutableRefObject<AccountEditorHandle | null>
 }
 
 type ViewState =
@@ -21,9 +32,15 @@ type ViewState =
   | { status: "error"; message: string }
   | { status: "ready"; json: JsonValue }
 
-export function FileViewer({ path }: FileViewerProps) {
-  const { decryptFile, payload } = useVault()
+export function FileViewer({ path, editorRef }: FileViewerProps) {
+  const { decryptFile, putEncryptedFile, payload, saving, saveError } =
+    useVault()
   const [state, setState] = useState<ViewState>({ status: "loading" })
+  const decryptFileRef = useRef(decryptFile)
+
+  useEffect(() => {
+    decryptFileRef.current = decryptFile
+  }, [decryptFile])
 
   const node = payload ? getNode(payload, path) : null
   const fileNode = node?.type === "file" ? node : null
@@ -31,8 +48,10 @@ export function FileViewer({ path }: FileViewerProps) {
 
   useEffect(() => {
     let cancelled = false
+    setState({ status: "loading" })
 
-    decryptFile(path)
+    decryptFileRef
+      .current(path)
       .then((json) => {
         if (!cancelled) setState({ status: "ready", json })
       })
@@ -49,7 +68,14 @@ export function FileViewer({ path }: FileViewerProps) {
     return () => {
       cancelled = true
     }
-  }, [path, decryptFile])
+  }, [path])
+
+  const handleSave = useCallback(
+    async (json: JsonValue) => {
+      await putEncryptedFile(path, json)
+    },
+    [path, putEncryptedFile]
+  )
 
   if (state.status === "loading") {
     return (
@@ -81,21 +107,21 @@ export function FileViewer({ path }: FileViewerProps) {
           />
           <span className="truncate font-medium">{name}</span>
         </div>
-        <span>
-          Created {formatNodeDate(fileNode?.createdAt)}
-        </span>
-        <span>
-          Modified {formatNodeDate(fileNode?.modifiedAt)}
-        </span>
+        <span>Created {formatNodeDate(fileNode?.createdAt)}</span>
+        <span>Modified {formatNodeDate(fileNode?.modifiedAt)}</span>
         <span>{fileNode ? formatNodeSize(fileNode) : "—"}</span>
         <span className="ml-auto">
-          Decrypted for viewing only — plaintext is cleared when you leave this
-          file.
+          Decrypted while open — plaintext clears when you leave this file.
         </span>
       </div>
-      <pre className="flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-        {JSON.stringify(state.json, null, 2)}
-      </pre>
+      <AccountEditor
+        key={path}
+        initialJson={state.json}
+        saving={saving}
+        saveError={saveError}
+        onSave={handleSave}
+        editorRef={editorRef}
+      />
     </div>
   )
 }

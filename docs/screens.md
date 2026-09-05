@@ -33,15 +33,18 @@ If already unlocked, visiting `/` redirects to `/dashboard`.
 
 - **Top bar:** breadcrumb, search (name / folder path only), New folder, New file (hidden in Recycle Bin), Lock
 - **Left sidebar:** root folders + **Recycle Bin** (count badge)
-- **Main pane:** folder listing, decrypted JSON file view, search results, or Recycle Bin listing
+- **Main pane:** folder listing, account file editor, search results, or Recycle Bin listing
 
 **Behavior:**
 
 - Requires unlocked archive; otherwise redirects to Gate
 - Clicking a folder lists its children (subfolders + files)
-- Clicking a file decrypts that one body into viewer-local state (AES-GCM under the file DEK); plaintext is cleared on navigate away or Lock
+- Clicking a file decrypts that one body into editor-local state (AES-GCM under the file DEK); plaintext is cleared on navigate away or Lock
+- The file editor is KeePass-style (`type: "account"`): title, description, username, password, URL, recovery email/keys, notes, and TOTP/HOTP settings with a live code generator
+- Save re-encrypts the file and packs/uploads the vault blob; leaving with unsaved edits prompts Save / Discard / Cancel
 - Search matches file/folder names and ancestor path segments — never decrypts file contents
 - Create folder / file targets the current directory (parent if a file is open), then `commit` / `putEncryptedFile` → pack → CKV2 encrypt → upload + local cache
+- New files are seeded as an empty `account` entry (not `{}`)
 - **Multi-select:** checkboxes on listing / search rows; when items are selected, **Delete** moves them to Recycle Bin (whole folder trees as one item). No confirm on soft-delete.
 - **Recycle Bin:** restore selected items to their original paths (or `name (restored)` if conflict); **Delete forever** asks for confirmation then purges. Files are not opened from the bin — restore first.
 - Lock clears payload, master password, DEK refs, and any open-file plaintext, then returns to Gate

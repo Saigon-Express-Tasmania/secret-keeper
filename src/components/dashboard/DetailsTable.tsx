@@ -9,6 +9,17 @@ export type DetailsSortKey =
   | "type"
   | "size"
   | "deleted"
+  | "username"
+  | "password"
+  | "otp"
+
+/** Wide explorer grid: checkbox + name + username + password + otp + meta. */
+export const CREDENTIAL_LISTING_GRID =
+  "grid-cols-[auto_minmax(12rem,2fr)_minmax(8rem,1fr)_minmax(9rem,1fr)_minmax(8rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_4.5rem_5rem] min-w-[56rem]"
+
+/** Search listing grid (no date created): checkbox + name + creds + modified + type + size. */
+export const CREDENTIAL_SEARCH_GRID =
+  "grid-cols-[auto_minmax(12rem,2fr)_minmax(8rem,1fr)_minmax(9rem,1fr)_minmax(8rem,1fr)_minmax(7rem,1fr)_4.5rem_5rem] min-w-[48rem]"
 
 export type SortDir = "asc" | "desc"
 
@@ -29,6 +40,8 @@ type DetailsTableProps = {
   leadingHeader?: ReactNode
   children: ReactNode
   className?: string
+  /** Override default column-count grid (must match row templates). */
+  gridClass?: string
 }
 
 /**
@@ -43,13 +56,15 @@ export function DetailsTable({
   leadingHeader,
   children,
   className,
+  gridClass,
 }: DetailsTableProps) {
+  const grid = gridClass ?? detailsGridClass(columns.length)
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       <div
         className={cn(
           "sticky top-0 z-10 grid items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase",
-          detailsGridClass(columns.length)
+          grid
         )}
         role="row"
       >

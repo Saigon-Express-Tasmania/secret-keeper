@@ -35,7 +35,7 @@ Storage is treated as a dumb blob store. The app never relies on the provider to
 | Piece | Role |
 | --- | --- |
 | Gate | Collect master password; download + decrypt + merge |
-| Dashboard | Browse/create vault folders and files; decrypt-on-open JSON view |
+| Dashboard | Browse/create vault folders and files; decrypt-on-open account editor |
 | `VaultContext` | In-memory archive + master password; cleared on lock |
 | `StorageStrategy` | Provider-specific download/upload |
 | `lib/vault/fs` | Zip-like archive tree helpers |
@@ -53,8 +53,6 @@ Storage is treated as a dumb blob store. The app never relies on the provider to
 
 ## Out of scope (current)
 
-- Editing/saving JSON file bodies (display only)
-- Delete/rename
 - Real item-level merge
 - Netlify Functions (documented only)
 - Working S3 / Supabase / Drive adapters
