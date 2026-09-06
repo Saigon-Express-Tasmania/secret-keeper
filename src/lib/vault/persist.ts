@@ -6,6 +6,7 @@ import {
 } from "@/lib/crypto/vault"
 import { createStorage, getVaultObjectKey } from "@/lib/storage"
 import { loadLocalVault, saveLocalVault } from "@/lib/storage/localCache"
+import { scheduleVaultBackup } from "@/lib/vault/backup"
 import { mergeVaults } from "@/lib/vault/merge"
 import type { RawVaultArchive, VaultArchive } from "@/lib/vault/fs"
 import {
@@ -37,6 +38,7 @@ async function tryDecrypt(
  * 3. Decrypt available copies, merge (remote-wins stub)
  * 4. Migrate to v3 per-file encryption; strip DEK from session payload
  * 5. Persist chosen ciphertext; re-upload if migrated or remote missing
+ * 6. Schedule a best-effort remote backup (does not block or fail unlock)
  */
 export async function unlockVault(
   masterPassword: string
@@ -71,6 +73,7 @@ export async function unlockVault(
     )
     await storage.upload(objectKey, blob)
     saveLocalVault(objectKey, blob)
+    scheduleVaultBackup(storage, blob)
     return { ...prepared, blob }
   }
 
@@ -101,6 +104,7 @@ export async function unlockVault(
     saveLocalVault(objectKey, blob)
   }
 
+  scheduleVaultBackup(storage, blob)
   return { ...prepared, blob }
 }
 

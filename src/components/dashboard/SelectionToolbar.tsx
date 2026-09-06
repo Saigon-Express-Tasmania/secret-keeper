@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Trash2 } from "lucide-react"
+import { Copy, Scissors, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -9,6 +9,8 @@ type SelectionToolbarProps = {
   onDelete: () => void
   /** Soft-delete label (default: Delete). */
   deleteLabel?: string
+  onCut?: () => void
+  onCopy?: () => void
   children?: ReactNode
 }
 
@@ -17,6 +19,8 @@ export function SelectionToolbar({
   busy = false,
   onDelete,
   deleteLabel = "Delete",
+  onCut,
+  onCopy,
   children,
 }: SelectionToolbarProps) {
   if (count === 0) return null
@@ -27,6 +31,28 @@ export function SelectionToolbar({
         {count} selected
       </span>
       <div className="ml-auto flex items-center gap-2">
+        {onCut ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCut}
+            disabled={busy}
+          >
+            <Scissors />
+            Cut
+          </Button>
+        ) : null}
+        {onCopy ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCopy}
+            disabled={busy}
+          >
+            <Copy />
+            Copy
+          </Button>
+        ) : null}
         {children}
         <Button
           variant="destructive"

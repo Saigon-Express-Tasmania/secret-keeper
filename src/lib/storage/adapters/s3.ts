@@ -13,5 +13,11 @@ export function createS3Storage(): StorageStrategy {
     async upload(_objectKey, _data) {
       throw new NotImplementedError("s3", "upload")
     },
+    async list(_prefix): Promise<string[]> {
+      throw new NotImplementedError("s3", "list")
+    },
+    async remove(_objectKey) {
+      throw new NotImplementedError("s3", "remove")
+    },
   }
 }

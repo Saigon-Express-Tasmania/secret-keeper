@@ -305,6 +305,16 @@ export function Dashboard() {
     setClipboard({ mode: "copy", paths: clipboardPathsFor(path) })
   }
 
+  function handleSelectionCut() {
+    if (selected.size === 0) return
+    setClipboard({ mode: "cut", paths: pruneDescendantPaths([...selected]) })
+  }
+
+  function handleSelectionCopy() {
+    if (selected.size === 0) return
+    setClipboard({ mode: "copy", paths: pruneDescendantPaths([...selected]) })
+  }
+
   async function handlePaste(destDir: string) {
     if (!clipboard || clipboard.paths.length === 0) return
     const { mode, paths } = clipboard
@@ -395,15 +405,21 @@ export function Dashboard() {
     navigateTo(path)
   }
 
-  async function handleSoftDelete() {
-    const paths = [...selected]
+  async function handleSoftDelete(paths = [...selected]) {
     if (paths.length === 0) return
     const wasUnder = pathIsUnderAny(resolvedPath, paths)
     const fallback = parentPath(paths[0]!)
     await commit((archive) => {
       moveToRecycleBin(archive, paths)
     })
-    setSelected(new Set())
+    setSelected((prev) => {
+      const next = new Set<string>()
+      for (const s of prev) {
+        if (paths.some((d) => s === d || s.startsWith(`${d}/`))) continue
+        next.add(s)
+      }
+      return next
+    })
     setClipboard((prev) => {
       if (!prev) return prev
       const remaining = prev.paths.filter(
@@ -627,6 +643,7 @@ export function Dashboard() {
           onPaste={(dest) => void handlePaste(dest)}
           onRename={openRename}
           onChangeIcon={(path) => openIconEditor(path)}
+          onDelete={(path) => void handleSoftDelete([path])}
         />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white/55">
@@ -662,6 +679,8 @@ export function Dashboard() {
               <SelectionToolbar
                 count={selected.size}
                 busy={saving}
+                onCut={handleSelectionCut}
+                onCopy={handleSelectionCopy}
                 onDelete={() => void handleSoftDelete()}
               />
               <div className="min-h-0 flex-1 overflow-auto">
@@ -679,6 +698,7 @@ export function Dashboard() {
                   onCopy={handleCopy}
                   onPaste={(dest) => void handlePaste(dest)}
                   onRename={openRename}
+                  onDelete={(path) => void handleSoftDelete([path])}
                   decryptListing={decryptListing}
                 />
               </div>
@@ -694,6 +714,8 @@ export function Dashboard() {
               <SelectionToolbar
                 count={selected.size}
                 busy={saving}
+                onCut={handleSelectionCut}
+                onCopy={handleSelectionCopy}
                 onDelete={() => void handleSoftDelete()}
               />
               <div className="min-h-0 flex-1 overflow-auto">
@@ -710,6 +732,7 @@ export function Dashboard() {
                   onCopy={handleCopy}
                   onPaste={(dest) => void handlePaste(dest)}
                   onRename={openRename}
+                  onDelete={(path) => void handleSoftDelete([path])}
                   pasteDestDir={resolvedPath}
                   decryptListing={decryptListing}
                 />

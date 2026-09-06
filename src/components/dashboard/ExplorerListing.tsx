@@ -59,6 +59,7 @@ type ExplorerListingProps = {
   onCopy?: (path: string) => void
   onPaste?: (destDir: string) => void
   onRename?: (path: string) => void
+  onDelete?: (path: string) => void
   /** Directory to paste into when right-clicking empty/background. */
   pasteDestDir?: string
   /** When true, decrypt file bodies for title/creds columns. */
@@ -93,6 +94,7 @@ export function ExplorerListing({
   onCopy,
   onPaste,
   onRename,
+  onDelete,
   pasteDestDir = "",
   decryptListing = false,
 }: ExplorerListingProps) {
@@ -313,6 +315,7 @@ export function ExplorerListing({
                   onPaste={() => onPaste?.(pasteInto)}
                   onRename={() => onRename?.(path)}
                   onChangeIcon={() => onChangeIcon?.(path, node)}
+                  onDelete={() => onDelete?.(path)}
                 />
               </ContextMenu>
             </li>

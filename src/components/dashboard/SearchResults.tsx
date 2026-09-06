@@ -54,6 +54,7 @@ type SearchResultsProps = {
   onCopy?: (path: string) => void
   onPaste?: (destDir: string) => void
   onRename?: (path: string) => void
+  onDelete?: (path: string) => void
   decryptListing?: boolean
 }
 
@@ -85,6 +86,7 @@ export function SearchResults({
   onCopy,
   onPaste,
   onRename,
+  onDelete,
   decryptListing = false,
 }: SearchResultsProps) {
   const [sortKey, setSortKey] = useState<DetailsSortKey>("name")
@@ -317,6 +319,7 @@ export function SearchResults({
                   onPaste={() => onPaste?.(pasteInto)}
                   onRename={() => onRename?.(hit.path)}
                   onChangeIcon={() => onChangeIcon?.(hit.path)}
+                  onDelete={() => onDelete?.(hit.path)}
                 />
               </ContextMenu>
             </li>

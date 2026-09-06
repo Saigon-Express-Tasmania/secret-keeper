@@ -26,6 +26,7 @@ type FolderSidebarProps = {
   onPaste?: (destDir: string) => void
   onRename?: (path: string) => void
   onChangeIcon?: (path: string) => void
+  onDelete?: (path: string) => void
 }
 
 export function FolderSidebar({
@@ -42,6 +43,7 @@ export function FolderSidebar({
   onPaste,
   onRename,
   onChangeIcon,
+  onDelete,
 }: FolderSidebarProps) {
   const cutPaths =
     clipboard?.mode === "cut" ? new Set(clipboard.paths) : new Set<string>()
@@ -92,6 +94,7 @@ export function FolderSidebar({
                       onPaste={() => onPaste?.(name)}
                       onRename={() => onRename?.(name)}
                       onChangeIcon={() => onChangeIcon?.(name)}
+                      onDelete={() => onDelete?.(name)}
                     />
                   </ContextMenu>
                 </li>

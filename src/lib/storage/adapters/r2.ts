@@ -60,6 +60,55 @@ function objectUrl(config: R2Config, objectKey: string): string {
   return `${config.apiEndpoint}/${config.bucket}/${key}`
 }
 
+function bucketUrl(config: R2Config): string {
+  return `${config.apiEndpoint}/${config.bucket}`
+}
+
+function decodeXmlText(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+}
+
+function parseListObjectsV2(xml: string): {
+  keys: string[]
+  truncated: boolean
+  continuationToken: string | null
+} {
+  const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((match) =>
+    decodeXmlText(match[1])
+  )
+  const truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml)
+  const tokenMatch = xml.match(
+    /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/
+  )
+  return {
+    keys,
+    truncated,
+    continuationToken: tokenMatch ? decodeXmlText(tokenMatch[1]) : null,
+  }
+}
+
+function networkError(operation: string, err: unknown): Error {
+  const message = err instanceof Error ? err.message : "Network request failed"
+  return new Error(
+    `R2 ${operation} failed (network/CORS): ${message}. Ensure the bucket allows CORS for this origin.`
+  )
+}
+
+async function httpError(
+  operation: string,
+  response: Response
+): Promise<Error> {
+  const body = await response.text().catch(() => "")
+  return new Error(
+    `R2 ${operation} failed (${response.status}): ${body || response.statusText}`
+  )
+}
+
 /** Cloudflare R2 adapter (S3-compatible API via aws4fetch). */
 export function createR2Storage(): StorageStrategy {
   const config = loadConfig()
@@ -79,21 +128,14 @@ export function createR2Storage(): StorageStrategy {
       try {
         response = await client.fetch(url, { method: "GET" })
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Network request failed"
-        throw new Error(
-          `R2 download failed (network/CORS): ${message}. Ensure the bucket allows CORS for this origin.`
-        )
+        throw networkError("download", err)
       }
 
       if (response.status === 404) {
         return null
       }
       if (!response.ok) {
-        const body = await response.text().catch(() => "")
-        throw new Error(
-          `R2 download failed (${response.status}): ${body || response.statusText}`
-        )
+        throw await httpError("download", response)
       }
 
       const buffer = await response.arrayBuffer()
@@ -115,18 +157,63 @@ export function createR2Storage(): StorageStrategy {
           },
         })
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Network request failed"
-        throw new Error(
-          `R2 upload failed (network/CORS): ${message}. Ensure the bucket allows CORS for this origin.`
-        )
+        throw networkError("upload", err)
       }
 
       if (!response.ok) {
-        const body = await response.text().catch(() => "")
-        throw new Error(
-          `R2 upload failed (${response.status}): ${body || response.statusText}`
-        )
+        throw await httpError("upload", response)
+      }
+    },
+
+    async list(prefix) {
+      const keys: string[] = []
+      let continuationToken: string | null = null
+
+      do {
+        const params = new URLSearchParams({
+          "list-type": "2",
+          prefix,
+          "max-keys": "1000",
+        })
+        if (continuationToken) {
+          params.set("continuation-token", continuationToken)
+        }
+
+        const url = `${bucketUrl(config)}?${params.toString()}`
+        let response: Response
+        try {
+          response = await client.fetch(url, { method: "GET" })
+        } catch (err) {
+          throw networkError("list", err)
+        }
+
+        if (!response.ok) {
+          throw await httpError("list", response)
+        }
+
+        const xml = await response.text()
+        const page = parseListObjectsV2(xml)
+        keys.push(...page.keys)
+        continuationToken = page.truncated ? page.continuationToken : null
+      } while (continuationToken)
+
+      return keys
+    },
+
+    async remove(objectKey) {
+      const url = objectUrl(config, objectKey)
+      let response: Response
+      try {
+        response = await client.fetch(url, { method: "DELETE" })
+      } catch (err) {
+        throw networkError("delete", err)
+      }
+
+      if (response.status === 404) {
+        return
+      }
+      if (!response.ok) {
+        throw await httpError("delete", response)
       }
     },
   }

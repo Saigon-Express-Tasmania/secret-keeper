@@ -13,6 +13,7 @@ export type ItemContextActions = {
   onPaste: () => void
   onRename: () => void
   onChangeIcon: () => void
+  onDelete: () => void
 }
 
 /** Menu items for a vault file/folder context menu. */
@@ -25,6 +26,7 @@ export function ItemContextMenuItems({
   onPaste,
   onRename,
   onChangeIcon,
+  onDelete,
 }: ItemContextActions) {
   return (
     <ContextMenuContent>
@@ -42,6 +44,13 @@ export function ItemContextMenuItems({
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={onRename}>Rename</ContextMenuItem>
       <ContextMenuItem onSelect={onChangeIcon}>Change Icon</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+        onSelect={onDelete}
+      >
+        Delete
+      </ContextMenuItem>
     </ContextMenuContent>
   )
 }

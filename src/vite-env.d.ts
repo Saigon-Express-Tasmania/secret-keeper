@@ -5,6 +5,12 @@ interface ImportMetaEnv {
   readonly VITE_VAULT_OBJECT_KEY?: string
   /** Argon2 pepper mixed with master password; never stored in the vault blob. */
   readonly VITE_VAULT_SALT_KEY?: string
+  /** Prefix for remote vault backup object keys. Default bak- */
+  readonly VITE_VAULT_BACKUP_PREFIX?: string
+  /** Minimum hours between login backups. 0 disables. Default 8 */
+  readonly VITE_VAULT_BACKUP_INTERVAL_HOURS?: string
+  /** Days of timestamped backups to keep. Default 7 */
+  readonly VITE_VAULT_BACKUP_RETENTION_DAYS?: string
   readonly VITE_R2_ACCOUNT_ID?: string
   readonly VITE_R2_ACCESS_KEY_ID?: string
   readonly VITE_R2_SECRET_ACCESS_KEY?: string

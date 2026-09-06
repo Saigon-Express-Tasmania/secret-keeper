@@ -9,6 +9,10 @@ export interface StorageStrategy {
   /** Returns ciphertext bytes, or null if the object does not exist. */
   download(objectKey: string): Promise<Uint8Array | null>
   upload(objectKey: string, data: Uint8Array): Promise<void>
+  /** Object keys whose names start with `prefix`. */
+  list(prefix: string): Promise<string[]>
+  /** Deletes an object. Missing keys are not an error. */
+  remove(objectKey: string): Promise<void>
 }
 
 export class NotImplementedError extends Error {

@@ -13,5 +13,11 @@ export function createSupabaseStorage(): StorageStrategy {
     async upload(_objectKey, _data) {
       throw new NotImplementedError("supabase", "upload")
     },
+    async list(_prefix): Promise<string[]> {
+      throw new NotImplementedError("supabase", "list")
+    },
+    async remove(_objectKey) {
+      throw new NotImplementedError("supabase", "remove")
+    },
   }
 }

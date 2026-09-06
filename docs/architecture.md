@@ -22,6 +22,7 @@ Gate ──(master password)──► download vault blob (R2)
                          ▼
                     merge (stub: remote wins) ──► refresh local cache
                          │                       (+ upload if remote missing)
+                         │                       (+ prefixed backup if due)
                          ▼
                     Dashboard (in-memory VaultArchive VFS)
                          │
@@ -37,11 +38,12 @@ Storage is treated as a dumb blob store. The app never relies on the provider to
 | Gate | Collect master password; download + decrypt + merge |
 | Dashboard | Browse/create vault folders and files; decrypt-on-open account editor |
 | `VaultContext` | In-memory archive + master password; cleared on lock |
-| `StorageStrategy` | Provider-specific download/upload |
+| `StorageStrategy` | Provider-specific download/upload/list/remove |
 | `lib/vault/fs` | Zip-like archive tree helpers |
 | `lib/crypto/pack` | CKZ1 compress + scramble |
 | `lib/crypto/vault` | Argon2id + AES-GCM encrypt/decrypt (CKV2) |
 | `lib/vault/persist` | Unlock orchestration |
+| `lib/vault/backup` | Login-time prefixed copies of the live vault blob |
 | `lib/storage/localCache` | Ciphertext replica in `localStorage` |
 
 ## Trust model (summary)

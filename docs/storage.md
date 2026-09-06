@@ -9,6 +9,8 @@ interface StorageStrategy {
   readonly id: "r2" | "s3" | "supabase" | "gdrive"
   download(objectKey: string): Promise<Uint8Array | null> // null = missing
   upload(objectKey: string, data: Uint8Array): Promise<void>
+  list(prefix: string): Promise<string[]>
+  remove(objectKey: string): Promise<void> // missing keys are ok
 }
 ```
 
@@ -51,7 +53,7 @@ Paste this as the bucket CORS policy (Settings → CORS Policy → JSON). Origin
       "http://localhost:5173",
       "http://localhost:5174"
     ],
-    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "DELETE"],
     "AllowedHeaders": [
       "Authorization",
       "Content-Type",
@@ -66,7 +68,7 @@ Paste this as the bucket CORS policy (Settings → CORS Policy → JSON). Origin
 
 Add production origins (e.g. `https://your-app.netlify.app`) to `AllowedOrigins` when you deploy. CORS changes can take up to 30 seconds.
 
-Download returns `null` on HTTP 404 (object not created yet).
+Download returns `null` on HTTP 404 (object not created yet). List uses `GET` on the bucket with `list-type=2`. Remove uses `DELETE` (404 is treated as success).
 
 ### AWS S3 (`s3`)
 
@@ -100,6 +102,22 @@ Stub only.
 
 Stub only.
 
+## Login backups
+
+After a successful unlock, backup runs **after the current turn** (unlock and navigation are not blocked). It snapshots the live vault ciphertext, then copies it to a timestamped object on the same bucket when the last backup is older than the interval (or none exist).
+
+A new backup is kept only after a re-download matches the snapshot (byte length + SHA-256). A mismatch deletes that object and retries up to 3 times. If every attempt fails, older backups are left in place. Failures are logged and never block login.
+
+Name: `{prefix}{objectKey}-{yyyyMMddTHHmmssZ}` — e.g. `bak-vault.enc-20260906T080000Z`.
+
+Due/not-due and retention are decided by parsing timestamps in those filenames (list by prefix, delete keys older than the retention window).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_VAULT_BACKUP_PREFIX` | `bak-` | List/delete prefix; must not match the live object key |
+| `VITE_VAULT_BACKUP_INTERVAL_HOURS` | `8` | Minimum hours between new backups; `0` disables |
+| `VITE_VAULT_BACKUP_RETENTION_DAYS` | `7` | Delete backups whose filename timestamp is older than this |
+
 ## Unlock persistence flow
 
-See `src/lib/vault/persist.ts`: download remote → load local → decrypt → `mergeVaults` (remote-wins stub) → write local cache → upload when remote was missing.
+See `src/lib/vault/persist.ts`: download remote → load local → decrypt → `mergeVaults` (remote-wins stub) → write local cache → upload when remote was missing → schedule a best-effort prefixed backup.
