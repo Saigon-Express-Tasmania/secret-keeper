@@ -19,7 +19,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`). Unlock with your master password — the Gate downloads or creates `vault.enc` on R2 and keeps a local ciphertext replica.
+Open the URL Vite prints (usually `http://localhost:5173`). Unlock with your vault name (e.g. `vault`) and master password — the Gate downloads or creates `{name}.enc` on R2 and keeps a local ciphertext replica.
 
 ## Project layout
 

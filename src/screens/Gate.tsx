@@ -21,6 +21,7 @@ import {
 import { useVault } from "@/context/VaultContext"
 
 export function Gate() {
+  const [vaultName, setVaultName] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -32,7 +33,7 @@ export function Gate() {
     setError(null)
     setBusy(true)
     try {
-      await unlock(password)
+      await unlock(password, vaultName)
       navigate("/dashboard")
     } catch (err) {
       const message =
@@ -53,15 +54,32 @@ export function Gate() {
             Credentials Keep
           </CardTitle>
           <CardDescription>
-            Enter your master password to unlock the vault.
+            Enter your vault name and master password to unlock.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
+              <Label htmlFor="username">Vault name</Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={vaultName}
+                onChange={(e) => setVaultName(e.target.value)}
+                placeholder="vault"
+                required
+                disabled={busy}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
               <Label htmlFor="master-password">Master password</Label>
               <Input
                 id="master-password"
+                name="password"
                 type="password"
                 autoComplete="current-password"
                 value={password}

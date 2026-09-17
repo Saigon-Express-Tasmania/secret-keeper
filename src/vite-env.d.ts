@@ -2,7 +2,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_STORAGE_PROVIDER?: string
-  readonly VITE_VAULT_OBJECT_KEY?: string
   /** Argon2 pepper mixed with master password; never stored in the vault blob. */
   readonly VITE_VAULT_SALT_KEY?: string
   /** Prefix for remote vault backup object keys. Default bak- */

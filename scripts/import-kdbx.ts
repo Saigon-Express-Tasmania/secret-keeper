@@ -3,10 +3,12 @@
  *
  * Usage:
  *   KDBX_PASSWORD=... npm run import-kdbx -- "F:\temp\Database_260817.kdbx" --upload
+ *   KDBX_PASSWORD=... npm run import-kdbx -- "F:\temp\Database_260817.kdbx" --upload --vault vault
  *
  * Prints group/entry titles and counts only (no secrets).
- * --upload replaces VITE_VAULT_OBJECT_KEY on the configured storage after
- * backing up the existing remote blob to .local/vault.enc.bak
+ * --upload replaces the named vault object on the configured storage after
+ * backing up the existing remote blob to .local/{objectKey}.bak
+ * --vault <name> selects the object key (default vault → vault.enc)
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -29,7 +31,7 @@ import {
 import { bytesToBase64, encryptFileJson, generateFileDekBytes, importFileDek } from "@/lib/crypto/file"
 import { encryptVault } from "@/lib/crypto/vault"
 import { parseOtpauthUri } from "@/lib/otp/otpauth"
-import { createStorage, getVaultObjectKey } from "@/lib/storage"
+import { createStorage, toVaultObjectKey } from "@/lib/storage"
 import {
   countFiles,
   createEmptyArchive,
@@ -459,17 +461,40 @@ async function importRecycleBin(
   archive.recycleBin = recycleBin
 }
 
-function parseArgs(argv: string[]): { kdbxPath: string; upload: boolean } {
-  const flags = new Set(argv.filter((a) => a.startsWith("-")))
-  const positional = argv.filter((a) => !a.startsWith("-"))
+function parseArgs(argv: string[]): {
+  kdbxPath: string
+  upload: boolean
+  vaultName: string
+} {
+  const upload = argv.includes("--upload")
+  let vaultName = "vault"
+  const positional: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!
+    if (arg === "--upload") continue
+    if (arg === "--vault") {
+      const next = argv[++i]
+      if (!next || next.startsWith("-")) {
+        throw new Error("--vault requires a name.")
+      }
+      vaultName = next
+      continue
+    }
+    if (arg.startsWith("-")) {
+      throw new Error(`Unknown flag: ${arg}`)
+    }
+    positional.push(arg)
+  }
   return {
     kdbxPath: positional[0] ?? "F:\\temp\\Database_260817.kdbx",
-    upload: flags.has("--upload"),
+    upload,
+    vaultName,
   }
 }
 
 async function main(): Promise<void> {
-  const { kdbxPath, upload } = parseArgs(process.argv.slice(2))
+  const { kdbxPath, upload, vaultName } = parseArgs(process.argv.slice(2))
+  const objectKey = toVaultObjectKey(vaultName)
   const password = process.env.KDBX_PASSWORD ?? process.env.CK_MASTER_PASSWORD
   if (!password) {
     throw new Error("Set KDBX_PASSWORD (or CK_MASTER_PASSWORD) in the environment.")
@@ -530,7 +555,9 @@ async function main(): Promise<void> {
   )
 
   if (!upload) {
-    console.log("Dry run only. Pass --upload to encrypt and replace vault.enc on storage.")
+    console.log(
+      `Dry run only. Pass --upload to encrypt and replace ${objectKey} on storage.`
+    )
     return
   }
 
@@ -563,13 +590,12 @@ async function main(): Promise<void> {
   const blob = await encryptVault(packed, password)
 
   const storage = createStorage()
-  const objectKey = getVaultObjectKey()
   const existing = await storage.download(objectKey)
   const scriptDir = dirname(fileURLToPath(import.meta.url))
   const backupDir = resolve(scriptDir, "..", ".local")
   mkdirSync(backupDir, { recursive: true })
   if (existing) {
-    const backupPath = resolve(backupDir, "vault.enc.bak")
+    const backupPath = resolve(backupDir, `${objectKey}.bak`)
     writeFileSync(backupPath, existing)
     console.log(`Backed up existing ${objectKey} (${existing.byteLength} bytes) → ${backupPath}`)
   } else {

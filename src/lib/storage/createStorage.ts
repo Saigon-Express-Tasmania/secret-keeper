@@ -38,6 +38,21 @@ export function createStorage(): StorageStrategy {
   }
 }
 
-export function getVaultObjectKey(): string {
-  return import.meta.env.VITE_VAULT_OBJECT_KEY || "vault.enc"
+/**
+ * Turn a Gate / CLI vault name into a storage object key.
+ * Empty names and path separators are rejected. A trailing `.enc` is added
+ * when missing (case-insensitive check).
+ */
+export function toVaultObjectKey(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    throw new Error("Vault name cannot be empty.")
+  }
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    throw new Error("Vault name cannot contain path separators.")
+  }
+  if (trimmed.toLowerCase().endsWith(".enc")) {
+    return trimmed
+  }
+  return `${trimmed}.enc`
 }

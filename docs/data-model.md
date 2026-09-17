@@ -1,6 +1,6 @@
 # Data model
 
-The vault is a **zip-like JSON archive**: nested folders and per-file encrypted JSON. After unlock, the tree of **names + ciphertext** lives in memory. A file body is decrypted only while that file is open in the viewer. On disk / remote the archive is packed (CKZ1) then encrypted (CKV2) as a single blob at `VITE_VAULT_OBJECT_KEY`.
+The vault is a **zip-like JSON archive**: nested folders and per-file encrypted JSON. After unlock, the tree of **names + ciphertext** lives in memory. A file body is decrypted only while that file is open in the viewer. On disk / remote the archive is packed (CKZ1) then encrypted (CKV2) as a single blob at the Gate-chosen object key (e.g. `vault.enc`).
 
 ## Top-level archive (`VaultArchive`)
 
@@ -208,4 +208,4 @@ New writes always use CKV2 outer blobs and archive v3.
 
 - In memory (session): `VaultArchive` without `fileDek`; file bodies stay ciphertext until opened
 - Packed for save: same tree plus `fileDek`
-- Remote / local cache: encrypted bytes at `VITE_VAULT_OBJECT_KEY`
+- Remote / local cache: encrypted bytes at the session object key (from Gate vault name)

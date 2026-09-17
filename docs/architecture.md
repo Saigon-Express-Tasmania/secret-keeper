@@ -1,6 +1,6 @@
 # Architecture
 
-Credentials Keep is a small personal vault SPA. It stores encrypted secrets as a single blob on an external object store and unlocks them in the browser with a master password. There are no user accounts and no server-side vault logic in the planned design.
+Credentials Keep is a small personal vault SPA. It stores encrypted secrets as a single blob on an external object store and unlocks them in the browser with a vault name plus master password. There are no user accounts and no server-side vault logic in the planned design.
 
 ## Goals
 
@@ -8,12 +8,12 @@ Credentials Keep is a small personal vault SPA. It stores encrypted secrets as a
 - Minimal UX: two screens only (Gate and Dashboard)
 - Host on Netlify as a static site
 - Pluggable storage backends (R2, S3, Supabase, Google Drive, …)
-- Mostly no login — the master password is the unlock gate
+- Mostly no login — vault name + master password is the unlock gate
 
 ## High-level flow
 
 ```text
-Gate ──(master password)──► download vault blob (R2)
+Gate ──(vault name + master password)──► download vault blob (R2)
                          │   + load local ciphertext cache
                          ▼
                     decrypt CKV2 (Argon2id + AES-GCM + env pepper)
@@ -35,9 +35,9 @@ Storage is treated as a dumb blob store. The app never relies on the provider to
 
 | Piece | Role |
 | --- | --- |
-| Gate | Collect master password; download + decrypt + merge |
+| Gate | Collect vault name + master password; download + decrypt + merge |
 | Dashboard | Browse/create vault folders and files; decrypt-on-open account editor |
-| `VaultContext` | In-memory archive + master password; cleared on lock |
+| `VaultContext` | In-memory archive + master password + object key; cleared on lock |
 | `StorageStrategy` | Provider-specific download/upload/list/remove |
 | `lib/vault/fs` | Zip-like archive tree helpers |
 | `lib/crypto/pack` | CKZ1 compress + scramble |

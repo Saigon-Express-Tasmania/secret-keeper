@@ -1,4 +1,3 @@
-import { getVaultObjectKey } from "@/lib/storage"
 import type { StorageStrategy } from "@/lib/storage/types"
 
 const DEFAULT_PREFIX = "bak-"
@@ -173,18 +172,20 @@ async function pruneExpiredBackups(
  * Copy the live vault ciphertext to a timestamped backup key when due,
  * then delete backups older than the retention window.
  * A new backup is kept only after a verified re-download.
+ * List/prune uses `{prefix}{objectKey}-` so due/retention is per vault.
  */
 export async function maybeBackupRemoteVault(
   storage: StorageStrategy,
-  blob: Uint8Array
+  blob: Uint8Array,
+  objectKey: string
 ): Promise<void> {
   const config = getBackupConfig()
   if (config.intervalHours <= 0 || !config.prefix) {
     return
   }
 
-  const objectKey = getVaultObjectKey()
-  const keys = await storage.list(config.prefix)
+  const listPrefix = `${config.prefix}${objectKey}-`
+  const keys = await storage.list(listPrefix)
   const dated = keys
     .map((key) => {
       const timestamp = parseBackupTimestamp(key, config.prefix)
@@ -216,11 +217,12 @@ export async function maybeBackupRemoteVault(
  */
 export function scheduleVaultBackup(
   storage: StorageStrategy,
-  blob: Uint8Array
+  blob: Uint8Array,
+  objectKey: string
 ): void {
   const snapshot = blob.slice()
   globalThis.setTimeout(() => {
-    void maybeBackupRemoteVault(storage, snapshot).catch((err) => {
+    void maybeBackupRemoteVault(storage, snapshot, objectKey).catch((err) => {
       const message = err instanceof Error ? err.message : String(err)
       console.warn("Vault backup skipped:", message)
     })

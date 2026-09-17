@@ -16,7 +16,7 @@ interface StorageStrategy {
 
 Factory: `createStorage()` in `src/lib/storage/createStorage.ts`, driven by `VITE_STORAGE_PROVIDER`.
 
-Vault object key: `VITE_VAULT_OBJECT_KEY` (default `vault.enc`).
+Vault object key: entered on the Gate as a vault name, then normalized by `toVaultObjectKey()` in `src/lib/storage/createStorage.ts` (appends `.enc` when missing). Example: `vault` → `vault.enc`.
 
 Local ciphertext cache: `src/lib/storage/localCache.ts` (browser `localStorage`).
 
@@ -110,7 +110,7 @@ A new backup is kept only after a re-download matches the snapshot (byte length 
 
 Name: `{prefix}{objectKey}-{yyyyMMddTHHmmssZ}` — e.g. `bak-vault.enc-20260906T080000Z`.
 
-Due/not-due and retention are decided by parsing timestamps in those filenames (list by prefix, delete keys older than the retention window).
+Due/not-due and retention are decided by listing keys under `{prefix}{objectKey}-` and parsing timestamps in those filenames (delete keys older than the retention window).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

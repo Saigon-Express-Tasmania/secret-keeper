@@ -10,6 +10,7 @@ import {
 
 import { decryptFileJson, encryptFileJson } from "@/lib/crypto/file"
 import type { EncryptedVaultBlob } from "@/lib/crypto/vault"
+import { toVaultObjectKey } from "@/lib/storage"
 import type { JsonValue, VaultArchive } from "@/lib/vault/fs"
 import { getNode, putFile } from "@/lib/vault/fs"
 import { saveVault, unlockVault } from "@/lib/vault/persist"
@@ -25,7 +26,7 @@ type VaultContextValue = {
   masterPassword: string | null
   saving: boolean
   saveError: string | null
-  unlock: (masterPassword: string) => Promise<void>
+  unlock: (masterPassword: string, vaultName: string) => Promise<void>
   lock: () => void
   /** Decrypt one file for viewing — result is not stored in context. */
   decryptFile: (path: string) => Promise<JsonValue>
@@ -72,11 +73,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const fileDekKeyRef = useRef<CryptoKey | null>(null)
   const fileDekBytesRef = useRef<Uint8Array | null>(null)
+  const objectKeyRef = useRef<string | null>(null)
 
-  const unlock = useCallback(async (password: string) => {
-    const result = await unlockVault(password)
+  const unlock = useCallback(async (password: string, vaultName: string) => {
+    const objectKey = toVaultObjectKey(vaultName)
+    const result = await unlockVault(password, objectKey)
     fileDekKeyRef.current = result.fileDekKey
     fileDekBytesRef.current = result.fileDekBytes
+    objectKeyRef.current = objectKey
     setPayload(result.payload)
     setMasterPassword(password)
     setSaveError(null)
@@ -85,6 +89,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const lock = useCallback(() => {
     fileDekKeyRef.current = null
     fileDekBytesRef.current = null
+    objectKeyRef.current = null
     setPayload(null)
     setMasterPassword(null)
     setSaveError(null)
@@ -109,7 +114,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback(
     async (mutator: (archive: VaultArchive) => void | Promise<void>) => {
-      if (!payload || !masterPassword || !fileDekBytesRef.current) {
+      if (
+        !payload ||
+        !masterPassword ||
+        !fileDekBytesRef.current ||
+        !objectKeyRef.current
+      ) {
         throw new Error("Vault is locked.")
       }
       setSaving(true)
@@ -118,7 +128,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       try {
         const next = structuredClone(payload)
         await mutator(next)
-        await saveVault(next, fileDekBytesRef.current, masterPassword)
+        await saveVault(
+          next,
+          fileDekBytesRef.current,
+          masterPassword,
+          objectKeyRef.current
+        )
         setPayload(next)
       } catch (err) {
         setPayload(previous)
@@ -151,7 +166,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const changeMasterPassword = useCallback(
     async (current: string, next: string) => {
-      if (!payload || !masterPassword || !fileDekBytesRef.current) {
+      if (
+        !payload ||
+        !masterPassword ||
+        !fileDekBytesRef.current ||
+        !objectKeyRef.current
+      ) {
         throw new Error("Vault is locked.")
       }
       if (current !== masterPassword) {
@@ -166,7 +186,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setSaving(true)
       setSaveError(null)
       try {
-        await saveVault(payload, fileDekBytesRef.current, next)
+        await saveVault(
+          payload,
+          fileDekBytesRef.current,
+          next,
+          objectKeyRef.current
+        )
         setMasterPassword(next)
       } catch (err) {
         const message =

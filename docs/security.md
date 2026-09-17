@@ -4,12 +4,12 @@ Credentials Keep is designed so that **storage providers never see plaintext sec
 
 ## Principles
 
-1. **No app accounts** — unlock is the master password alone.
+1. **No app accounts** — unlock is the vault name (object key) plus master password.
 2. **Client-side crypto** — encrypt before upload; decrypt after download.
 3. **Opaque blob** — providers store ciphertext bytes only.
 4. **Per-file encryption** — after unlock, the explorer holds folder/file **names** and **file ciphertext**, not every secret in plaintext.
 5. **Decrypt on open** — opening a file AES-GCM-decrypts that one body into viewer-local state; navigating away or Lock clears it.
-6. **Lock clears memory** — payload, master password, file DEK refs, and open-file plaintext are dropped.
+6. **Lock clears memory** — payload, master password, object key, file DEK refs, and open-file plaintext are dropped.
 
 ## Crypto
 

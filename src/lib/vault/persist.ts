@@ -4,7 +4,7 @@ import {
   encryptVault,
   type EncryptedVaultBlob,
 } from "@/lib/crypto/vault"
-import { createStorage, getVaultObjectKey } from "@/lib/storage"
+import { createStorage } from "@/lib/storage"
 import { loadLocalVault, saveLocalVault } from "@/lib/storage/localCache"
 import { scheduleVaultBackup } from "@/lib/vault/backup"
 import { mergeVaults } from "@/lib/vault/merge"
@@ -41,10 +41,10 @@ async function tryDecrypt(
  * 6. Schedule a best-effort remote backup (does not block or fail unlock)
  */
 export async function unlockVault(
-  masterPassword: string
+  masterPassword: string,
+  objectKey: string
 ): Promise<UnlockResult> {
   const storage = createStorage()
-  const objectKey = getVaultObjectKey()
 
   const remoteBlob = await storage.download(objectKey)
   const localBlob = loadLocalVault(objectKey)
@@ -73,7 +73,7 @@ export async function unlockVault(
     )
     await storage.upload(objectKey, blob)
     saveLocalVault(objectKey, blob)
-    scheduleVaultBackup(storage, blob)
+    scheduleVaultBackup(storage, blob, objectKey)
     return { ...prepared, blob }
   }
 
@@ -104,7 +104,7 @@ export async function unlockVault(
     saveLocalVault(objectKey, blob)
   }
 
-  scheduleVaultBackup(storage, blob)
+  scheduleVaultBackup(storage, blob, objectKey)
   return { ...prepared, blob }
 }
 
@@ -114,10 +114,10 @@ export async function unlockVault(
 export async function saveVault(
   payload: VaultArchive,
   fileDekBytes: Uint8Array,
-  masterPassword: string
+  masterPassword: string,
+  objectKey: string
 ): Promise<EncryptedVaultBlob> {
   const storage = createStorage()
-  const objectKey = getVaultObjectKey()
   const blob = await encryptVault(
     archiveForSave(payload, fileDekBytes),
     masterPassword
