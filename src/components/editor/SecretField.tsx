@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useState, type ClipboardEventHandler, type ReactNode } from "react"
 import { Eye, EyeOff } from "lucide-react"
 
 import { CopyButton } from "@/components/editor/CopyButton"
@@ -12,6 +12,7 @@ type SecretFieldProps = {
   label: string
   value: string
   onChange: (value: string) => void
+  onPaste?: ClipboardEventHandler<HTMLInputElement>
   placeholder?: string
   autoComplete?: string
   className?: string
@@ -23,6 +24,7 @@ export function SecretField({
   label,
   value,
   onChange,
+  onPaste,
   placeholder,
   autoComplete = "off",
   className,
@@ -39,6 +41,7 @@ export function SecretField({
           type={revealed ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onPaste={onPaste}
           placeholder={placeholder}
           autoComplete={autoComplete}
           className="font-mono"

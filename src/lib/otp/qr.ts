@@ -1,0 +1,52 @@
+/**
+ * Decode a QR code (e.g. an otpauth:// enrollment code) from an image, locally.
+ */
+
+/** Large screenshots make jsQR slow; downscale so the longest side fits. */
+const MAX_SIDE = 1600
+
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/")
+}
+
+/** First image file in a clipboard / drag-and-drop payload, if any. */
+export function firstImageFrom(data: DataTransfer): File | null {
+  for (const file of Array.from(data.files)) {
+    if (isImageFile(file)) return file
+  }
+  for (const item of Array.from(data.items)) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile()
+      if (file) return file
+    }
+  }
+  return null
+}
+
+/** Returns the QR payload text, or null when no QR code is found. */
+export async function decodeQrFromImage(blob: Blob): Promise<string | null> {
+  const [{ default: jsQR }, bitmap] = await Promise.all([
+    import("jsqr"),
+    createImageBitmap(blob),
+  ])
+  try {
+    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+
+    const canvas = document.createElement("canvas")
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })
+    if (!ctx) throw new Error("Canvas 2D context unavailable")
+    // Transparent PNGs would otherwise read as black-on-black.
+    ctx.fillStyle = "#fff"
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(bitmap, 0, 0, width, height)
+
+    const { data } = ctx.getImageData(0, 0, width, height)
+    return jsQR(data, width, height)?.data ?? null
+  } finally {
+    bitmap.close()
+  }
+}

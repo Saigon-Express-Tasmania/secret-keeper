@@ -1,5 +1,11 @@
-import { useEffect, useState } from "react"
-import { ChevronRight, Loader2 } from "lucide-react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+} from "react"
+import { ChevronRight, ImageUp, Loader2 } from "lucide-react"
 
 import { CopyButton } from "@/components/editor/CopyButton"
 import { SecretField } from "@/components/editor/SecretField"
@@ -15,7 +21,13 @@ import {
 } from "@/lib/account/schema"
 import { generateOtpCode } from "@/lib/otp/otp"
 import { tryParseOtpauthOrNull } from "@/lib/otp/otpauth"
+import { decodeQrFromImage, firstImageFrom, isImageFile } from "@/lib/otp/qr"
 import { cn } from "@/lib/utils"
+
+type QrStatus =
+  | { kind: "idle" }
+  | { kind: "busy" }
+  | { kind: "error"; message: string }
 
 type OtpPanelProps = {
   otp: OtpSettings | null
@@ -33,6 +45,9 @@ export function OtpPanel({
 }: OtpPanelProps) {
   const mode: "off" | OtpType = otp?.type ?? "off"
   const [tick, setTick] = useState(() => Date.now())
+  const [qrStatus, setQrStatus] = useState<QrStatus>({ kind: "idle" })
+  const [dragging, setDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!otp || otp.type !== "totp") return
@@ -64,6 +79,62 @@ export function OtpPanel({
       return
     }
     patch({ secret: value })
+  }
+
+  async function importImage(file: Blob) {
+    setQrStatus({ kind: "busy" })
+    let text: string | null
+    try {
+      text = await decodeQrFromImage(file)
+    } catch {
+      setQrStatus({ kind: "error", message: "Couldn't read image." })
+      return
+    }
+    if (!text) {
+      setQrStatus({ kind: "error", message: "No QR code found in image." })
+      return
+    }
+    if (text.trim().toLowerCase().startsWith("otpauth-migration://")) {
+      setQrStatus({
+        kind: "error",
+        message:
+          "Google Authenticator export codes aren't supported; export a single account's QR instead.",
+      })
+      return
+    }
+    setQrStatus({ kind: "idle" })
+    handleSecretChange(text.trim())
+  }
+
+  function handleSecretPaste(e: ClipboardEvent<HTMLInputElement>) {
+    const image = firstImageFrom(e.clipboardData)
+    if (!image) return
+    e.preventDefault()
+    void importImage(image)
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    if (!e.dataTransfer.types.includes("Files")) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "copy"
+    setDragging(true)
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setDragging(false)
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    if (!e.dataTransfer.types.includes("Files")) return
+    e.preventDefault()
+    setDragging(false)
+    const image = firstImageFrom(e.dataTransfer)
+    if (image) {
+      void importImage(image)
+    } else {
+      setQrStatus({ kind: "error", message: "Drop an image file." })
+    }
   }
 
   const result = otp ? generateOtpCode(otp, tick) : null
@@ -161,13 +232,68 @@ export function OtpPanel({
             )}
           </div>
 
-          <SecretField
-            id="otp-secret"
-            label="Secret (Base32 or paste otpauth:// URI)"
-            value={otp.secret}
-            onChange={handleSecretChange}
-            placeholder="JBSWY3DPEHPK3PXP"
-          />
+          <div
+            className="relative space-y-1.5"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <SecretField
+              id="otp-secret"
+              label="Secret (Base32, otpauth:// URI, or QR image)"
+              value={otp.secret}
+              onChange={handleSecretChange}
+              onPaste={handleSecretPaste}
+              placeholder="JBSWY3DPEHPK3PXP"
+              trailing={
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  disabled={qrStatus.kind === "busy"}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Load QR image"
+                  title="Load QR image"
+                >
+                  {qrStatus.kind === "busy" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <ImageUp />
+                  )}
+                </Button>
+              }
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ""
+                if (!file) return
+                if (isImageFile(file)) {
+                  void importImage(file)
+                } else {
+                  setQrStatus({ kind: "error", message: "Pick an image file." })
+                }
+              }}
+            />
+            {qrStatus.kind === "error" ? (
+              <p className="text-xs text-destructive">{qrStatus.message}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {qrStatus.kind === "busy"
+                  ? "Reading QR code…"
+                  : "Paste, drop, or browse a QR code image."}
+              </p>
+            )}
+            {dragging ? (
+              <div className="pointer-events-none absolute -inset-2 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-500 bg-violet-50/90 text-sm font-medium text-violet-700 dark:bg-violet-950/90 dark:text-violet-200">
+                Drop QR image
+              </div>
+            ) : null}
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
