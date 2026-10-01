@@ -1,12 +1,27 @@
+import { Eye, LayoutGrid, List } from "lucide-react"
+
 import {
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
 } from "@/components/ui/context-menu"
+import type { ListingViewMode } from "@/lib/prefs/listingView"
+
+/** Listing view mode switch shown as a View submenu when provided. */
+export type ListingViewControl = {
+  mode: ListingViewMode
+  onChange: (mode: ListingViewMode) => void
+}
 
 export type ItemContextActions = {
   canEdit?: boolean
   canPaste: boolean
+  view?: ListingViewControl
   onEdit?: () => void
   onCut: () => void
   onCopy: () => void
@@ -16,10 +31,41 @@ export type ItemContextActions = {
   onDelete: () => void
 }
 
+/** View → Grid / List submenu followed by a separator. */
+function ViewSubmenu({ view }: { view: ListingViewControl }) {
+  return (
+    <>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <Eye />
+          View
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup
+            value={view.mode}
+            onValueChange={(value) => view.onChange(value as ListingViewMode)}
+          >
+            <ContextMenuRadioItem value="grid">
+              <LayoutGrid />
+              Grid
+            </ContextMenuRadioItem>
+            <ContextMenuRadioItem value="list">
+              <List />
+              List
+            </ContextMenuRadioItem>
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      <ContextMenuSeparator />
+    </>
+  )
+}
+
 /** Menu items for a vault file/folder context menu. */
 export function ItemContextMenuItems({
   canEdit = false,
   canPaste,
+  view,
   onEdit,
   onCut,
   onCopy,
@@ -30,6 +76,7 @@ export function ItemContextMenuItems({
 }: ItemContextActions) {
   return (
     <ContextMenuContent>
+      {view ? <ViewSubmenu view={view} /> : null}
       {canEdit ? (
         <>
           <ContextMenuItem onSelect={() => onEdit?.()}>Edit</ContextMenuItem>
@@ -58,13 +105,16 @@ export function ItemContextMenuItems({
 /** Paste-only menu for empty folder / listing background. */
 export function PasteOnlyMenuItems({
   canPaste,
+  view,
   onPaste,
 }: {
   canPaste: boolean
+  view?: ListingViewControl
   onPaste: () => void
 }) {
   return (
     <ContextMenuContent>
+      {view ? <ViewSubmenu view={view} /> : null}
       <ContextMenuItem onSelect={onPaste} disabled={!canPaste}>
         Paste
       </ContextMenuItem>

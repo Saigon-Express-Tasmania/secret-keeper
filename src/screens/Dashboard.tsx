@@ -50,6 +50,11 @@ import {
   writeDecryptListingPref,
 } from "@/lib/prefs/decryptListing"
 import {
+  readListingViewPref,
+  writeListingViewPref,
+  type ListingViewMode,
+} from "@/lib/prefs/listingView"
+import {
   assertValidName,
   copyNodes,
   getNode,
@@ -132,6 +137,7 @@ export function Dashboard() {
   const [leavePending, setLeavePending] = useState<(() => void) | null>(null)
   const [leaveBusy, setLeaveBusy] = useState(false)
   const [decryptListing, setDecryptListing] = useState(readDecryptListingPref)
+  const [listingView, setListingView] = useState(readListingViewPref)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -177,6 +183,11 @@ export function Dashboard() {
     setViewMode("explorer")
     setCurrentPath(path)
     setSearchQuery("")
+  }
+
+  function changeListingView(mode: ListingViewMode) {
+    setListingView(mode)
+    writeListingViewPref(mode)
   }
 
   function handleLock() {
@@ -598,6 +609,8 @@ export function Dashboard() {
         <ToolsMenu
           disabled={saving}
           exporting={exporting}
+          viewMode={listingView}
+          onViewModeChange={changeListingView}
           onExport={() => void handleExport()}
           onImport={() => setImportOpen(true)}
           onChangePassword={() => setChangePasswordOpen(true)}
@@ -735,6 +748,8 @@ export function Dashboard() {
                   onDelete={(path) => void handleSoftDelete([path])}
                   pasteDestDir={resolvedPath}
                   decryptListing={decryptListing}
+                  viewMode={listingView}
+                  onViewModeChange={changeListingView}
                 />
               </div>
             </>

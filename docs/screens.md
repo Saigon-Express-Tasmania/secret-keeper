@@ -35,6 +35,7 @@ If already unlocked, visiting `/` redirects to `/dashboard`.
 - **Top bar:** breadcrumb, search (name / folder path only), New folder, New file (hidden in Recycle Bin), Change password, Lock
 - **Left sidebar:** root folders + **Recycle Bin** (count badge)
 - **Main pane:** folder listing, account file editor, search results, or Recycle Bin listing
+- **Folder listing views:** **List** (details table) or **Grid** (one card per file/folder: icon, title, credentials when Decrypt listing is on, modified date, size). Toggle via **Tools → View** or right-click → **View**; the choice is remembered per browser (`ck:listing-view`)
 
 **Behavior:**
 

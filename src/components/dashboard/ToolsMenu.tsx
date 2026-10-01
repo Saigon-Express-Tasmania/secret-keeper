@@ -1,6 +1,9 @@
 import {
   Download,
+  Eye,
   KeyRound,
+  LayoutGrid,
+  List,
   Loader2,
   Upload,
   Wrench,
@@ -11,13 +14,21 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import type { ListingViewMode } from "@/lib/prefs/listingView"
 
 type ToolsMenuProps = {
   disabled?: boolean
   exporting?: boolean
+  viewMode: ListingViewMode
+  onViewModeChange: (mode: ListingViewMode) => void
   onExport: () => void
   onImport: () => void
   onChangePassword: () => void
@@ -26,6 +37,8 @@ type ToolsMenuProps = {
 export function ToolsMenu({
   disabled = false,
   exporting = false,
+  viewMode,
+  onViewModeChange,
   onExport,
   onImport,
   onChangePassword,
@@ -52,6 +65,30 @@ export function ToolsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Eye />
+            View
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup
+              value={viewMode}
+              onValueChange={(value) =>
+                onViewModeChange(value as ListingViewMode)
+              }
+            >
+              <DropdownMenuRadioItem value="grid">
+                <LayoutGrid />
+                Grid
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="list">
+                <List />
+                List
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={busy}
           onSelect={() => {
