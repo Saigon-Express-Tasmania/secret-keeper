@@ -42,6 +42,7 @@ type VaultArchive = {
 - Session / React payload **strips** `fileDek`. The DEK is held as a non-extractable `CryptoKey` (plus bytes for re-pack) outside the tree.
 - Empty vaults seed four directories: `passwords/`, `auth-keys/`, `wallets/`, `notes/`. Extra dirs and files are allowed.
 - Name segments must not be empty, `.`, `..`, or contain `/` or `\`.
+- Files and folders may carry optional metadata: `createdAt`, `modifiedAt` (ISO-8601) and `icon`. `icon` is either a vendored Iconify catalog id (e.g. `fluent-color:document-16`) or an absolute `https://` image URL (see [security.md](security.md#external-icon-urls)). Unknown or invalid values render as the default icon.
 - **Recycle Bin** is archive metadata (`recycleBin`), not a folder in `root`. Soft-delete moves a file or whole folder tree into a bin entry; restore puts it back at `originalPath` (or `name (restored)` if taken); purge removes the entry forever. Missing `recycleBin` is treated as `[]`.
 
 ## Per-file encryption

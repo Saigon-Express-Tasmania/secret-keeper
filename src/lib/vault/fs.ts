@@ -4,6 +4,8 @@
  * Packed blob (CKZ1) may include fileDek; React session payload strips it.
  */
 
+import { assertStorableIcon } from "@/lib/icons/external"
+
 export type JsonValue =
   | null
   | boolean
@@ -16,7 +18,7 @@ export type JsonValue =
 export type NodeMeta = {
   createdAt: string
   modifiedAt: string
-  /** Catalog id, e.g. `fluent-color:document-16`. */
+  /** Catalog id (e.g. `fluent-color:document-16`) or an `https://` image URL. */
   icon?: string
 }
 
@@ -215,6 +217,7 @@ export function mkdir(
 ): void {
   const parts = splitPath(path)
   if (parts.length === 0) return
+  if (options?.icon) assertStorableIcon(options.icon)
 
   const t = nowIso()
   let dir = archive.root
@@ -257,6 +260,7 @@ export function putFile(
   }
   const fileName = parts[parts.length - 1]!
   assertValidName(fileName)
+  if (file.icon) assertStorableIcon(file.icon)
 
   const parent = parts.slice(0, -1).join("/")
   if (parent) mkdir(archive, parent)
@@ -297,6 +301,7 @@ export function setNodeIcon(
   path: string,
   iconId: string | undefined
 ): void {
+  if (iconId) assertStorableIcon(iconId)
   const node = getNode(archive, path)
   if (!node) {
     throw new Error(`Path not found: ${path}`)

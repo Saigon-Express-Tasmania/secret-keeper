@@ -6,3 +6,12 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Defense in depth: only same-origin scripts; images may come from any https
+# host (external node icons are rendered as plain <img> only).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://*.r2.cloudflarestorage.com"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
