@@ -33,7 +33,7 @@ export function SecretField({
   const [revealed, setRevealed] = useState(false)
 
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("space-y-1", className)}>
       <Label htmlFor={id}>{label}</Label>
       <div className="flex gap-2">
         <Input

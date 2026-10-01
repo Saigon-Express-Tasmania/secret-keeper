@@ -1,5 +1,5 @@
 /**
- * Decode a QR code (e.g. an otpauth:// enrollment code) from an image, locally.
+ * Decode / encode QR codes (e.g. otpauth:// enrollment codes) locally.
  */
 
 /** Large screenshots make jsQR slow; downscale so the longest side fits. */
@@ -49,4 +49,23 @@ export async function decodeQrFromImage(blob: Blob): Promise<string | null> {
   } finally {
     bitmap.close()
   }
+}
+
+/** Render text as a black-on-white QR code PNG, `size` pixels square. */
+export async function encodeQrPng(text: string, size = 512): Promise<Blob> {
+  const { toCanvas } = await import("qrcode")
+  const canvas = document.createElement("canvas")
+  await toCanvas(canvas, text, {
+    width: size,
+    margin: 2,
+    errorCorrectionLevel: "M",
+    color: { dark: "#000000", light: "#ffffff" },
+  })
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) =>
+        blob ? resolve(blob) : reject(new Error("Couldn't render QR image.")),
+      "image/png"
+    )
+  })
 }

@@ -35,11 +35,11 @@ export function PasswordGenerator({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-end gap-3 rounded-lg border border-amber-200/80 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-950/30",
+        "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200/80 bg-amber-50/60 px-2.5 py-2 dark:border-amber-800 dark:bg-amber-950/30",
         className
       )}
     >
-      <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
         <label
           htmlFor="pw-len"
           className="text-xs font-medium text-amber-900 dark:text-amber-100"
@@ -59,7 +59,7 @@ export function PasswordGenerator({
           className="h-8 w-20 bg-background"
         />
       </div>
-      <label className="flex items-center gap-2 pb-1 text-xs font-medium text-amber-900 dark:text-amber-100">
+      <label className="flex items-center gap-2 text-xs font-medium text-amber-900 dark:text-amber-100">
         <input
           type="checkbox"
           checked={symbols}
@@ -72,6 +72,7 @@ export function PasswordGenerator({
         type="button"
         size="sm"
         variant="secondary"
+        className="ml-auto"
         onClick={() => onGenerate(generatePassword(length, symbols))}
       >
         <WandSparkles />

@@ -41,7 +41,7 @@ If already unlocked, visiting `/` redirects to `/dashboard`.
 - Requires unlocked archive; otherwise redirects to Gate
 - Clicking a folder lists its children (subfolders + files)
 - Clicking a file decrypts that one body into editor-local state (AES-GCM under the file DEK); plaintext is cleared on navigate away or Lock
-- The file editor is KeePass-style (`type: "account"`): title, description, username, password, URL, recovery email/keys, notes, and TOTP/HOTP settings with a live code generator
+- The file editor is KeePass-style (`type: "account"`): title, description, username, password, URL, recovery email/keys, notes, and TOTP/HOTP settings with a live code generator. OTP settings can be imported from a QR image (paste / drop / browse), and a TOTP can be shown as a setup QR code for authenticator apps (copy image, download PNG, or copy the `otpauth://` link)
 - Save re-encrypts the file and packs/uploads the vault blob; leaving with unsaved edits prompts Save / Discard / Cancel
 - Search matches file/folder names and ancestor path segments — never decrypts file contents
 - Create folder / file targets the current directory (parent if a file is open), then `commit` / `putEncryptedFile` → pack → CKV2 encrypt → upload + local cache

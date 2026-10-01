@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type ReactNode,
 } from "react"
 import {
   ExternalLink,
@@ -46,6 +47,8 @@ type AccountEditorProps = {
   onSave: (json: JsonValue) => Promise<void>
   /** Expose dirty/save/discard to Dashboard leave-gate. */
   editorRef?: MutableRefObject<AccountEditorHandle | null>
+  /** File info rendered at the start of the save toolbar. */
+  meta?: ReactNode
 }
 
 function isHttpUrl(value: string): boolean {
@@ -63,6 +66,7 @@ export function AccountEditor({
   saveError,
   onSave,
   editorRef,
+  meta,
 }: AccountEditorProps) {
   const parsed = useMemo(() => parseAccount(initialJson), [initialJson])
   const [entry, setEntry] = useState<AccountEntry>(parsed)
@@ -165,19 +169,24 @@ export function AccountEditor({
   const canOpenUrl = isHttpUrl(entry.url)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-emerald-200/70 bg-gradient-to-r from-emerald-50/95 to-sky-50/90 px-4 py-2 backdrop-blur">
-        <span
-          className={cn(
-            "text-xs font-medium",
-            dirty
-              ? "text-amber-700 dark:text-amber-400"
-              : "text-emerald-700 dark:text-emerald-400"
-          )}
-        >
-          {dirty ? "Unsaved changes" : "Saved"}
-        </span>
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-sky-200/70 bg-gradient-to-r from-sky-50/95 to-emerald-50/90 px-3 py-1.5 backdrop-blur">
+        {meta ? (
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sky-800">
+            {meta}
+          </div>
+        ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              "text-xs font-medium",
+              dirty
+                ? "text-amber-700 dark:text-amber-400"
+                : "text-emerald-700 dark:text-emerald-400"
+            )}
+          >
+            {dirty ? "Unsaved changes" : "Saved"}
+          </span>
           <Button
             type="button"
             size="sm"
@@ -201,200 +210,212 @@ export function AccountEditor({
       </div>
 
       {errorText ? (
-        <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+        <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {errorText}
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
-        <EditorSection
-          title="Account"
-          description="Title, description, and service URL"
-          tone="sky"
-          defaultOpen
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="acct-title">Title</Label>
-            <Input
-              id="acct-title"
-              value={entry.title}
-              onChange={(e) => patch({ title: e.target.value })}
-              placeholder="GitHub"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="acct-desc">Description</Label>
-            <Input
-              id="acct-desc"
-              value={entry.description}
-              onChange={(e) => patch({ description: e.target.value })}
-              placeholder="Work account"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="acct-url">URL</Label>
-            <div className="flex gap-2">
-              <Input
-                id="acct-url"
-                value={entry.url}
-                onChange={(e) => patch({ url: e.target.value })}
-                placeholder="https://github.com/login"
-                className="font-mono text-sm"
-              />
-              <CopyButton value={entry.url} size="icon" />
-              {canOpenUrl ? (
-                <Button type="button" size="icon" variant="outline" asChild>
-                  <a
-                    href={entry.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open URL"
-                  >
-                    <ExternalLink />
-                  </a>
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  disabled
-                  aria-label="Open URL"
-                >
-                  <ExternalLink />
-                </Button>
-              )}
-            </div>
-          </div>
-        </EditorSection>
-
-        <EditorSection
-          title="Login"
-          description="Username and password"
-          tone="amber"
-          defaultOpen
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="acct-user">Username</Label>
-            <div className="flex gap-2">
-              <Input
-                id="acct-user"
-                value={entry.username}
-                onChange={(e) => patch({ username: e.target.value })}
-                autoComplete="off"
-              />
-              <CopyButton value={entry.username} size="icon" />
-            </div>
-          </div>
-          <SecretField
-            id="acct-pass"
-            label="Password"
-            value={entry.password}
-            onChange={(v) => patch({ password: v })}
-          />
-          <PasswordGenerator onGenerate={(pw) => patch({ password: pw })} />
-        </EditorSection>
-
-        <EditorSection
-          title="Recovery"
-          description="Recovery email and backup codes"
-          tone="emerald"
-          defaultOpen={false}
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="acct-recovery-email">Recovery email</Label>
-            <div className="flex gap-2">
-              <Input
-                id="acct-recovery-email"
-                type="email"
-                value={entry.recoveryEmail}
-                onChange={(e) => patch({ recoveryEmail: e.target.value })}
-                placeholder="backup@example.com"
-              />
-              <CopyButton value={entry.recoveryEmail} size="icon" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Recovery keys</Label>
-              <div className="flex gap-2">
-                <CopyButton
-                  value={entry.recoveryKeys.filter(Boolean).join("\n")}
-                  label="Copy all"
-                  disabled={entry.recoveryKeys.every((k) => !k.trim())}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={addRecoveryKey}
-                >
-                  <Plus />
-                  Add
-                </Button>
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        <div className="mx-auto grid w-full max-w-7xl items-start gap-3 @4xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-3">
+            <EditorSection
+              title="Account"
+              description="Title, description, and service URL"
+              tone="sky"
+              defaultOpen
+            >
+              <div className="grid gap-3 @md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="acct-title">Title</Label>
+                  <Input
+                    id="acct-title"
+                    value={entry.title}
+                    onChange={(e) => patch({ title: e.target.value })}
+                    placeholder="GitHub"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="acct-desc">Description</Label>
+                  <Input
+                    id="acct-desc"
+                    value={entry.description}
+                    onChange={(e) => patch({ description: e.target.value })}
+                    placeholder="Work account"
+                  />
+                </div>
               </div>
-            </div>
-            {entry.recoveryKeys.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No recovery keys yet. Add backup codes from the service.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {entry.recoveryKeys.map((key, index) => (
-                  <li key={index} className="flex gap-2">
-                    <Input
-                      value={key}
-                      onChange={(e) =>
-                        updateRecoveryKey(index, e.target.value)
-                      }
-                      className="font-mono text-sm"
-                      placeholder={`Code ${index + 1}`}
-                    />
-                    <CopyButton value={key} size="icon" />
+              <div className="space-y-1">
+                <Label htmlFor="acct-url">URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="acct-url"
+                    value={entry.url}
+                    onChange={(e) => patch({ url: e.target.value })}
+                    placeholder="https://github.com/login"
+                    className="font-mono text-sm"
+                  />
+                  <CopyButton value={entry.url} size="icon" />
+                  {canOpenUrl ? (
+                    <Button type="button" size="icon" variant="outline" asChild>
+                      <a
+                        href={entry.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Open URL"
+                      >
+                        <ExternalLink />
+                      </a>
+                    </Button>
+                  ) : (
                     <Button
                       type="button"
                       size="icon"
                       variant="outline"
-                      onClick={() => removeRecoveryKey(index)}
-                      aria-label="Remove key"
+                      disabled
+                      aria-label="Open URL"
                     >
-                      <Trash2 />
+                      <ExternalLink />
                     </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  )}
+                </div>
+              </div>
+            </EditorSection>
+
+            <EditorSection
+              title="Login"
+              description="Username and password"
+              tone="amber"
+              defaultOpen
+            >
+              <div className="grid gap-3 @lg:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="acct-user">Username</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="acct-user"
+                      value={entry.username}
+                      onChange={(e) => patch({ username: e.target.value })}
+                      autoComplete="off"
+                    />
+                    <CopyButton value={entry.username} size="icon" />
+                  </div>
+                </div>
+                <SecretField
+                  id="acct-pass"
+                  label="Password"
+                  value={entry.password}
+                  onChange={(v) => patch({ password: v })}
+                />
+              </div>
+              <PasswordGenerator onGenerate={(pw) => patch({ password: pw })} />
+            </EditorSection>
+
+            <EditorSection
+              title="Recovery"
+              description="Recovery email and backup codes"
+              tone="emerald"
+              defaultOpen={false}
+            >
+              <div className="space-y-1">
+                <Label htmlFor="acct-recovery-email">Recovery email</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="acct-recovery-email"
+                    type="email"
+                    value={entry.recoveryEmail}
+                    onChange={(e) => patch({ recoveryEmail: e.target.value })}
+                    placeholder="backup@example.com"
+                  />
+                  <CopyButton value={entry.recoveryEmail} size="icon" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>Recovery keys</Label>
+                  <div className="flex gap-2">
+                    <CopyButton
+                      value={entry.recoveryKeys.filter(Boolean).join("\n")}
+                      label="Copy all"
+                      disabled={entry.recoveryKeys.every((k) => !k.trim())}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addRecoveryKey}
+                    >
+                      <Plus />
+                      Add
+                    </Button>
+                  </div>
+                </div>
+                {entry.recoveryKeys.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No recovery keys yet. Add backup codes from the service.
+                  </p>
+                ) : (
+                  <ul className="grid gap-2 @lg:grid-cols-2">
+                    {entry.recoveryKeys.map((key, index) => (
+                      <li key={index} className="flex gap-2">
+                        <Input
+                          value={key}
+                          onChange={(e) =>
+                            updateRecoveryKey(index, e.target.value)
+                          }
+                          className="font-mono text-sm"
+                          placeholder={`Code ${index + 1}`}
+                        />
+                        <CopyButton value={key} size="icon" />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          onClick={() => removeRecoveryKey(index)}
+                          aria-label="Remove key"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </EditorSection>
           </div>
-        </EditorSection>
 
-        <EditorSection
-          title="Authenticator"
-          description="TOTP / HOTP generation"
-          tone="violet"
-          defaultOpen
-        >
-          <OtpPanel
-            otp={entry.otp}
-            onChange={(otp) => patch({ otp })}
-            onHotpNext={handleHotpNext}
-            hotpBusy={hotpBusy || saving}
-          />
-        </EditorSection>
+          <div className="flex min-w-0 flex-col gap-3">
+            <EditorSection
+              title="Authenticator"
+              description="TOTP / HOTP generation"
+              tone="violet"
+              defaultOpen
+            >
+              <OtpPanel
+                otp={entry.otp}
+                onChange={(otp) => patch({ otp })}
+                onHotpNext={handleHotpNext}
+                hotpBusy={hotpBusy || saving}
+                fallbackIssuer={entry.title}
+                fallbackLabel={entry.username}
+              />
+            </EditorSection>
 
-        <EditorSection
-          title="Notes"
-          description="Free-form notes"
-          tone="rose"
-          defaultOpen={false}
-        >
-          <Textarea
-            id="acct-notes"
-            value={entry.notes}
-            onChange={(e) => patch({ notes: e.target.value })}
-            placeholder="Anything else worth remembering…"
-            rows={6}
-          />
-        </EditorSection>
+            <EditorSection
+              title="Notes"
+              description="Free-form notes"
+              tone="rose"
+              defaultOpen={false}
+            >
+              <Textarea
+                id="acct-notes"
+                value={entry.notes}
+                onChange={(e) => patch({ notes: e.target.value })}
+                placeholder="Anything else worth remembering…"
+                rows={4}
+              />
+            </EditorSection>
+          </div>
+        </div>
       </div>
     </div>
   )

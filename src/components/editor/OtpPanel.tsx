@@ -5,9 +5,10 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from "react"
-import { ChevronRight, ImageUp, Loader2 } from "lucide-react"
+import { ChevronRight, ImageUp, Loader2, QrCode } from "lucide-react"
 
 import { CopyButton } from "@/components/editor/CopyButton"
+import { OtpQrDialog } from "@/components/editor/OtpQrDialog"
 import { SecretField } from "@/components/editor/SecretField"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +36,9 @@ type OtpPanelProps = {
   /** HOTP next-code: parent increments counter and saves immediately. */
   onHotpNext: () => Promise<void>
   hotpBusy?: boolean
+  /** Used in the setup QR code when the OTP issuer / label are blank. */
+  fallbackIssuer?: string
+  fallbackLabel?: string
 }
 
 export function OtpPanel({
@@ -42,10 +46,13 @@ export function OtpPanel({
   onChange,
   onHotpNext,
   hotpBusy,
+  fallbackIssuer,
+  fallbackLabel,
 }: OtpPanelProps) {
   const mode: "off" | OtpType = otp?.type ?? "off"
   const [tick, setTick] = useState(() => Date.now())
   const [qrStatus, setQrStatus] = useState<QrStatus>({ kind: "idle" })
+  const [qrOpen, setQrOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -146,7 +153,7 @@ export function OtpPanel({
       : 0
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -178,20 +185,31 @@ export function OtpPanel({
         </p>
       ) : (
         <>
-          <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-100/80 to-fuchsia-50 p-4 dark:border-violet-800 dark:from-violet-950/50 dark:to-fuchsia-950/30">
+          <div className="rounded-lg border border-violet-200 bg-gradient-to-br from-violet-100/80 to-fuchsia-50 p-3 dark:border-violet-800 dark:from-violet-950/50 dark:to-fuchsia-950/30">
             {result?.ok ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
                       Current code
                     </p>
-                    <p className="mt-1 font-mono text-3xl font-semibold tracking-[0.2em] text-violet-950 tabular-nums dark:text-violet-50">
+                    <p className="mt-0.5 font-mono text-2xl font-semibold tracking-[0.2em] text-violet-950 tabular-nums dark:text-violet-50">
                       {result.code}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <CopyButton value={result.code} label="Copy code" />
+                    {otp.type === "totp" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setQrOpen(true)}
+                      >
+                        <QrCode />
+                        Show QR
+                      </Button>
+                    ) : null}
                     {otp.type === "hotp" ? (
                       <Button
                         type="button"
@@ -216,7 +234,7 @@ export function OtpPanel({
                       <span>Refreshes in {remaining}s</span>
                       <span>{period}s period</span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-violet-200/80 dark:bg-violet-900">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-violet-200/80 dark:bg-violet-900">
                       <div
                         className="h-full rounded-full bg-violet-600 transition-[width] duration-500 ease-linear dark:bg-violet-400"
                         style={{ width: `${Math.max(0, progress) * 100}%` }}
@@ -233,7 +251,7 @@ export function OtpPanel({
           </div>
 
           <div
-            className="relative space-y-1.5"
+            className="relative space-y-1"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -295,8 +313,8 @@ export function OtpPanel({
             ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
+          <div className="grid gap-3 @xs:grid-cols-3">
+            <div className="space-y-1">
               <Label htmlFor="otp-algo">Algorithm</Label>
               <select
                 id="otp-algo"
@@ -311,7 +329,7 @@ export function OtpPanel({
                 <option value="SHA512">SHA512</option>
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="otp-digits">Digits</Label>
               <select
                 id="otp-digits"
@@ -329,8 +347,8 @@ export function OtpPanel({
               </select>
             </div>
             {otp.type === "totp" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="otp-period">Period (seconds)</Label>
+              <div className="space-y-1">
+                <Label htmlFor="otp-period">Period (s)</Label>
                 <Input
                   id="otp-period"
                   type="number"
@@ -344,7 +362,7 @@ export function OtpPanel({
                 />
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label htmlFor="otp-counter">Counter</Label>
                 <Input
                   id="otp-counter"
@@ -360,7 +378,9 @@ export function OtpPanel({
                 />
               </div>
             )}
-            <div className="space-y-1.5">
+          </div>
+          <div className="grid gap-3 @md:grid-cols-2">
+            <div className="space-y-1">
               <Label htmlFor="otp-issuer">Issuer</Label>
               <Input
                 id="otp-issuer"
@@ -369,7 +389,7 @@ export function OtpPanel({
                 placeholder="GitHub"
               />
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-1">
               <Label htmlFor="otp-label">Account label</Label>
               <Input
                 id="otp-label"
@@ -379,6 +399,18 @@ export function OtpPanel({
               />
             </div>
           </div>
+
+          {otp.type === "totp" ? (
+            <OtpQrDialog
+              open={qrOpen}
+              onOpenChange={setQrOpen}
+              otp={{
+                ...otp,
+                issuer: otp.issuer.trim() || fallbackIssuer?.trim() || "",
+                label: otp.label.trim() || fallbackLabel?.trim() || "",
+              }}
+            />
+          ) : null}
         </>
       )}
     </div>

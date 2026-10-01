@@ -81,7 +81,7 @@ export function EditorSection({
     <Collapsible open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "overflow-hidden rounded-xl border shadow-sm",
+          "overflow-hidden rounded-lg border shadow-sm",
           styles.border
         )}
       >
@@ -89,20 +89,20 @@ export function EditorSection({
           <button
             type="button"
             className={cn(
-              "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
+              "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors",
               styles.header
             )}
           >
             <span
-              className={cn("h-8 w-1 shrink-0 rounded-full", ACCENT_BAR[tone])}
+              className={cn("h-4 w-1 shrink-0 rounded-full", ACCENT_BAR[tone])}
               aria-hidden
             />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold tracking-tight">
+            <span className="flex min-w-0 flex-1 items-baseline gap-2">
+              <span className="shrink-0 text-sm font-semibold tracking-tight">
                 {title}
               </span>
               {description ? (
-                <span className="mt-0.5 block text-xs opacity-70">
+                <span className="truncate text-xs opacity-70">
                   {description}
                 </span>
               ) : null}
@@ -117,7 +117,7 @@ export function EditorSection({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className={cn("space-y-4 px-4 py-4", styles.body)}>
+          <div className={cn("@container space-y-3 p-3", styles.body)}>
             {children}
           </div>
         </CollapsibleContent>

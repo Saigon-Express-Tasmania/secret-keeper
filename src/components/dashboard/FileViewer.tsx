@@ -5,7 +5,7 @@ import {
   useState,
   type MutableRefObject,
 } from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2, Lock } from "lucide-react"
 
 import {
   AccountEditor,
@@ -26,6 +26,9 @@ type FileViewerProps = {
   path: string
   editorRef?: MutableRefObject<AccountEditorHandle | null>
 }
+
+const DECRYPTED_NOTE =
+  "Decrypted while open — plaintext clears when you leave this file."
 
 type ViewState =
   | { status: "loading" }
@@ -96,24 +99,6 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-sky-200/70 bg-gradient-to-r from-sky-50/90 to-emerald-50/70 px-4 py-2 text-xs text-sky-800">
-        <div className="flex min-w-0 items-center gap-2 text-sky-950">
-          <NodeIcon
-            iconId={
-              fileNode ? resolveNodeIcon(fileNode, name) : undefined
-            }
-            kind="file"
-            size={18}
-          />
-          <span className="truncate font-medium">{name}</span>
-        </div>
-        <span>Created {formatNodeDate(fileNode?.createdAt)}</span>
-        <span>Modified {formatNodeDate(fileNode?.modifiedAt)}</span>
-        <span>{fileNode ? formatNodeSize(fileNode) : "—"}</span>
-        <span className="ml-auto">
-          Decrypted while open — plaintext clears when you leave this file.
-        </span>
-      </div>
       <AccountEditor
         key={path}
         initialJson={state.json}
@@ -121,6 +106,27 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
         saveError={saveError}
         onSave={handleSave}
         editorRef={editorRef}
+        meta={
+          <>
+            <div className="flex min-w-0 items-center gap-2 text-sky-950">
+              <NodeIcon
+                iconId={
+                  fileNode ? resolveNodeIcon(fileNode, name) : undefined
+                }
+                kind="file"
+                size={18}
+              />
+              <span className="truncate font-medium">{name}</span>
+              <span title={DECRYPTED_NOTE} className="shrink-0 text-sky-600">
+                <Lock className="size-3.5" aria-hidden />
+                <span className="sr-only">{DECRYPTED_NOTE}</span>
+              </span>
+            </div>
+            <span>Created {formatNodeDate(fileNode?.createdAt)}</span>
+            <span>Modified {formatNodeDate(fileNode?.modifiedAt)}</span>
+            <span>{fileNode ? formatNodeSize(fileNode) : "—"}</span>
+          </>
+        }
       />
     </div>
   )
