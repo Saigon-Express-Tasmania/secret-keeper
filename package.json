@@ -8,11 +8,13 @@
     "dev:api": "vite-node scripts/dev-api.ts",
     "dev:netlify": "npx --yes netlify-cli@27 dev",
     "build": "tsc -b && vite build",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "import-kdbx": "vite-node scripts/import-kdbx.ts",
+    "ck-file": "vite-node scripts/ck-file.ts",
+    "import-kdbx": "vite-node scripts/ck-file.ts from-kdbx",
     "expand-icons": "node scripts/expand-icons.mjs"
   },
   "dependencies": {

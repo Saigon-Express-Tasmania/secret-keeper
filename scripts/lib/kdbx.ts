@@ -1,21 +1,11 @@
 /**
- * One-shot KeePass (.kdbx) → Credentials Keep vault importer.
- *
- * Usage:
- *   KDBX_PASSWORD=... npm run import-kdbx -- "F:\temp\Database_260817.kdbx" --upload
- *   KDBX_PASSWORD=... npm run import-kdbx -- "F:\temp\Database_260817.kdbx" --upload --vault vault
- *
- * Prints group/entry titles and counts only (no secrets).
- * --upload replaces the named vault object on the configured storage after
- * backing up the existing remote blob to .local/{objectKey}.bak
- * --vault <name> selects the object key (default vault → vault.enc)
+ * KeePass (.kdbx) → vault archive mapping for `ck-file from-kdbx`.
+ * Entries become KeePass-style account files (encrypted under a file DEK);
+ * the KeePass recycle bin becomes the vault Recycle Bin. Prints titles and
+ * counts only — never secrets.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
-
-import { argon2d, argon2i, argon2id } from "@noble/hashes/argon2.js"
+import { argon2d, argon2id } from "@noble/hashes/argon2.js"
 import * as kdbxweb from "kdbxweb"
 import type { KdbxBinary, KdbxBinaryWithHash, KdbxEntry, KdbxGroup } from "kdbxweb"
 
@@ -28,12 +18,9 @@ import {
   type OtpDigits,
   type OtpSettings,
 } from "@/lib/account/schema"
-import { bytesToBase64, encryptFileJson, generateFileDekBytes, importFileDek } from "@/lib/crypto/file"
-import { encryptVault } from "@/lib/crypto/vault"
+import { bytesToBase64, encryptFileJson } from "@/lib/crypto/file"
 import { parseOtpauthUri } from "@/lib/otp/otpauth"
-import { createStorage, toVaultObjectKey } from "@/lib/storage"
 import {
-  countFiles,
   createEmptyArchive,
   getNode,
   joinPath,
@@ -47,7 +34,6 @@ import {
   type RecycleBinEntry,
   type VaultArchive,
 } from "@/lib/vault/fs"
-import { archiveForSave } from "@/lib/vault/session"
 
 const MAX_ATTACHMENT_BYTES = 512 * 1024
 const MAX_TOTAL_ATTACHMENT_BYTES = 2 * 1024 * 1024
@@ -69,7 +55,7 @@ const OTP_FIELDS = new Set([
   "HmacOtp-Counter",
 ])
 
-type Stats = {
+export type Stats = {
   groups: number
   entries: number
   recycledEntries: number
@@ -80,7 +66,7 @@ type Stats = {
   customFieldNames: Set<string>
 }
 
-function installArgon2(): void {
+export function installArgon2(): void {
   kdbxweb.CryptoEngine.setArgon2Impl(
     async (password, salt, memory, iterations, length, parallelism, type, version) => {
       const opts = {
@@ -91,7 +77,8 @@ function installArgon2(): void {
         version,
         maxmem: Math.max(memory * 1024 * 2, 2 * 1024 * 1024 * 1024),
       }
-      const fn = type === 0 ? argon2d : type === 1 ? argon2i : argon2id
+      // kdbxweb passes 0 = Argon2d, 2 = Argon2id.
+      const fn = type === 0 ? argon2d : argon2id
       const hash = fn(new Uint8Array(password), new Uint8Array(salt), opts)
       return hash.buffer.slice(hash.byteOffset, hash.byteOffset + hash.byteLength)
     }
@@ -124,6 +111,7 @@ function uuidToString(uuid: kdbxweb.KdbxUuid): string {
 }
 
 function sanitizeSegment(raw: string): string {
+  // eslint-disable-next-line no-control-regex -- strip control characters from names
   let name = raw.replace(/[/\\]/g, "-").replace(/[\u0000-\u001f]/g, "").trim()
   name = name.replace(/[. ]+$/g, "")
   if (!name || name === "." || name === "..") return "untitled"
@@ -314,7 +302,7 @@ async function encryptAccountFile(
   return file
 }
 
-function printTree(
+export function printTree(
   group: KdbxGroup,
   indent: string,
   recycleBinUuid: kdbxweb.KdbxUuid | undefined,
@@ -365,7 +353,7 @@ async function putAccountAt(
   return dest
 }
 
-async function importGroup(
+export async function importGroup(
   archive: VaultArchive,
   group: KdbxGroup,
   destPath: string,
@@ -433,7 +421,7 @@ async function groupToDir(
   return dir
 }
 
-async function importRecycleBin(
+export async function importRecycleBin(
   archive: VaultArchive,
   bin: KdbxGroup,
   key: CryptoKey,
@@ -461,166 +449,49 @@ async function importRecycleBin(
   archive.recycleBin = recycleBin
 }
 
-function parseArgs(argv: string[]): {
-  kdbxPath: string
-  upload: boolean
-  vaultName: string
-} {
-  const upload = argv.includes("--upload")
-  let vaultName = "vault"
-  const positional: string[] = []
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!
-    if (arg === "--upload") continue
-    if (arg === "--vault") {
-      const next = argv[++i]
-      if (!next || next.startsWith("-")) {
-        throw new Error("--vault requires a name.")
-      }
-      vaultName = next
-      continue
-    }
-    if (arg.startsWith("-")) {
-      throw new Error(`Unknown flag: ${arg}`)
-    }
-    positional.push(arg)
-  }
+export function emptyStats(): Stats {
   return {
-    kdbxPath: positional[0] ?? "F:\\temp\\Database_260817.kdbx",
-    upload,
-    vaultName,
+    groups: 0,
+    entries: 0,
+    recycledEntries: 0,
+    recycledGroups: 0,
+    otp: 0,
+    attachmentsKept: 0,
+    attachmentsSkipped: 0,
+    customFieldNames: new Set(),
   }
 }
 
-async function main(): Promise<void> {
-  const { kdbxPath, upload, vaultName } = parseArgs(process.argv.slice(2))
-  const objectKey = toVaultObjectKey(vaultName)
-  const password = process.env.KDBX_PASSWORD ?? process.env.CK_MASTER_PASSWORD
-  if (!password) {
-    throw new Error("Set KDBX_PASSWORD (or CK_MASTER_PASSWORD) in the environment.")
-  }
-
+/** Open a KeePass database with its master password. */
+export async function loadKdbx(data: Uint8Array, password: string): Promise<kdbxweb.Kdbx> {
   installArgon2()
-
-  const abs = resolve(kdbxPath)
-  const data = readFileSync(abs)
-  const copy = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-  const credentials = new kdbxweb.Credentials(
-    kdbxweb.ProtectedValue.fromString(password)
-  )
-
-  let db: kdbxweb.Kdbx
+  const copy = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+  const credentials = new kdbxweb.Credentials(kdbxweb.ProtectedValue.fromString(password))
   try {
-    db = await kdbxweb.Kdbx.load(copy, credentials)
+    return await kdbxweb.Kdbx.load(copy, credentials)
   } catch (err) {
     const code = err instanceof kdbxweb.KdbxError ? err.code : ""
     if (code === kdbxweb.Consts.ErrorCodes.InvalidKey) {
-      throw new Error("Invalid KeePass master password (or missing keyfile).")
+      throw new Error("Invalid KeePass master password (or the database needs a key file).")
     }
     throw err
   }
-
-  const root = db.getDefaultGroup()
-  const recycleBinUuid = db.meta.recycleBinUuid
-  const kdfUuid = db.header.kdfParameters?.get("$UUID")
-  const kdf =
-    kdfUuid instanceof ArrayBuffer
-      ? kdbxweb.ByteUtils.bytesToBase64(kdfUuid) === kdbxweb.Consts.KdfId.Argon2id
-        ? "Argon2id"
-        : kdbxweb.ByteUtils.bytesToBase64(kdfUuid) === kdbxweb.Consts.KdfId.Aes
-          ? "AES-KDF"
-          : "Argon2d"
-      : db.header.keyEncryptionRounds
-        ? `AES rounds=${db.header.keyEncryptionRounds}`
-        : "unknown"
-
-  console.log(`Opened ${abs}`)
-  console.log(`KDBX ${db.versionMajor}.${db.versionMinor}  name=${db.meta.name ?? "(none)"}  kdf=${kdf}`)
-  console.log("")
-
-  const inspectStats: Stats = {
-    groups: 0,
-    entries: 0,
-    recycledEntries: 0,
-    recycledGroups: 0,
-    otp: 0,
-    attachmentsKept: 0,
-    attachmentsSkipped: 0,
-    customFieldNames: new Set(),
-  }
-  printTree(root, "", recycleBinUuid, inspectStats, false)
-  console.log("")
-  console.log(
-    `Summary: ${inspectStats.groups} groups, ${inspectStats.entries} entries, ${inspectStats.recycledEntries} recycled entries, ${inspectStats.recycledGroups} recycle-bin groups`
-  )
-
-  if (!upload) {
-    console.log(
-      `Dry run only. Pass --upload to encrypt and replace ${objectKey} on storage.`
-    )
-    return
-  }
-
-  const fileDekBytes = generateFileDekBytes()
-  const fileDekKey = await importFileDek(fileDekBytes)
-  const archive = createEmptyArchive()
-  const budget = { used: 0 }
-  const mapStats: Stats = {
-    groups: 0,
-    entries: 0,
-    recycledEntries: 0,
-    recycledGroups: 0,
-    otp: 0,
-    attachmentsKept: 0,
-    attachmentsSkipped: 0,
-    customFieldNames: new Set(),
-  }
-
-  await importGroup(archive, root, "", fileDekKey, recycleBinUuid, mapStats, budget)
-
-  if (recycleBinUuid) {
-    const bin = db.getGroup(recycleBinUuid)
-    if (bin) await importRecycleBin(archive, bin, fileDekKey, mapStats, budget)
-  }
-
-  archive.updatedAt = new Date().toISOString()
-
-  const packed = archiveForSave(archive, fileDekBytes)
-  console.log("Encrypting CKV2 blob (Argon2id)…")
-  const blob = await encryptVault(packed, password)
-
-  const storage = createStorage()
-  const existing = await storage.download(objectKey)
-  const scriptDir = dirname(fileURLToPath(import.meta.url))
-  const backupDir = resolve(scriptDir, "..", ".local")
-  mkdirSync(backupDir, { recursive: true })
-  if (existing) {
-    const backupPath = resolve(backupDir, `${objectKey}.bak`)
-    writeFileSync(backupPath, existing)
-    console.log(`Backed up existing ${objectKey} (${existing.byteLength} bytes) → ${backupPath}`)
-  } else {
-    console.log(`No existing ${objectKey} on ${storage.id}.`)
-  }
-
-  await storage.upload(objectKey, blob)
-  console.log(
-    `Uploaded ${objectKey} to ${storage.id} (${blob.byteLength} bytes, ${countFiles(archive)} files, recycleBin=${archive.recycleBin?.length ?? 0})`
-  )
-  if (mapStats.otp) console.log(`OTP entries: ${mapStats.otp}`)
-  if (mapStats.attachmentsKept || mapStats.attachmentsSkipped) {
-    console.log(
-      `Attachments kept: ${mapStats.attachmentsKept}, skipped: ${mapStats.attachmentsSkipped}`
-    )
-  }
-  if (mapStats.customFieldNames.size > 0) {
-    console.log(
-      `Custom fields stored in extra: ${[...mapStats.customFieldNames].sort().join(", ")}`
-    )
-  }
-  console.log("Unlock the Gate with the same master password.")
 }
 
-main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : err)
-  process.exitCode = 1
-})
+/** Map a KeePass database into an archive whose files are encrypted under `fileDekKey`. */
+export async function buildArchiveFromKdbx(
+  db: kdbxweb.Kdbx,
+  fileDekKey: CryptoKey
+): Promise<{ archive: VaultArchive; stats: Stats }> {
+  const archive = createEmptyArchive()
+  const stats = emptyStats()
+  const budget = { used: 0 }
+  const recycleBinUuid = db.meta.recycleBinUuid
+  await importGroup(archive, db.getDefaultGroup(), "", fileDekKey, recycleBinUuid, stats, budget)
+  if (recycleBinUuid) {
+    const bin = db.getGroup(recycleBinUuid)
+    if (bin) await importRecycleBin(archive, bin, fileDekKey, stats, budget)
+  }
+  archive.updatedAt = new Date().toISOString()
+  return { archive, stats }
+}

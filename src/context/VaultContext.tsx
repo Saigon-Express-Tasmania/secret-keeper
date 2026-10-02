@@ -9,101 +9,127 @@ import {
   type ReactNode,
 } from "react"
 
-import { decryptFileJson, encryptFileJson } from "@/lib/crypto/file"
-import type { EncryptedVaultBlob } from "@/lib/crypto/vault"
+import { encryptFileJson } from "@/lib/crypto/file"
+import { parseKey } from "@/lib/crypto/keys"
+import { forgetDevice as forgetLocalDevice } from "@/lib/device/deviceStore"
 import { readAutoLockMinutes } from "@/lib/prefs/autoLock"
 import { clearSecretClipboard } from "@/lib/security/clipboard"
 import { watchIdle } from "@/lib/security/idleLock"
-import { toVaultObjectKey } from "@/lib/storage"
+import { sessionDeps } from "@/lib/vault/deps"
 import type { JsonValue, VaultArchive } from "@/lib/vault/fs"
-import { getNode, putFile } from "@/lib/vault/fs"
-import { saveVault, unlockVault } from "@/lib/vault/persist"
+import { putFile } from "@/lib/vault/fs"
 import {
-  buildExportBlob,
-  mergeImportIntoArchive,
-} from "@/lib/vault/transfer"
+  isSessionExpired,
+  type RekeyOptions,
+  type RekeyResult,
+  type VaultSession,
+} from "@/lib/vault/vaultSession"
+import type { AccountRequest, AccountStatus, AccountSummary } from "@/shared/api"
 
-export type LockReason = "manual" | "idle" | "pagehide"
+export type LockReason = "manual" | "idle" | "pagehide" | "expired"
+
+/** Non-secret facts about the unlocked vault for the UI. */
+export type VaultInfo = {
+  name: string
+  account: AccountSummary
+  device: { trusted: boolean; exp?: number }
+  rev: number
+  requirePasskey: boolean
+  passkeys: { id: string; label: string; added: string }[]
+  hasEmailSlot: boolean
+}
 
 type VaultContextValue = {
   unlocked: boolean
   payload: VaultArchive | null
+  vault: VaultInfo | null
   /** Why the vault was last locked (shown on the Gate); null before first unlock. */
   lockReason: LockReason | null
   saving: boolean
   saveError: string | null
-  unlock: (masterPassword: string, vaultName: string) => Promise<void>
+  /** Hand a freshly unlocked/created session to the app. */
+  attach: (session: VaultSession) => void
   lock: (reason?: LockReason) => void
   /** Decrypt one file for viewing — result is not stored in context. */
   decryptFile: (path: string) => Promise<JsonValue>
   /**
-   * Clone payload, run mutator, encrypt+upload. On failure keeps previous payload.
-   * Mutator may be async (e.g. encrypt new file body).
+   * Clone payload, run mutator, encrypt+upload (replays once on conflict).
+   * On failure keeps the previous payload.
    */
-  commit: (
-    mutator: (archive: VaultArchive) => void | Promise<void>
-  ) => Promise<void>
+  commit: (mutator: (archive: VaultArchive) => void | Promise<void>) => Promise<void>
   /** Encrypt JSON and write as a new/updated encrypted file, then save. */
-  putEncryptedFile: (
-    path: string,
-    json: JsonValue,
-    options?: { icon?: string }
-  ) => Promise<void>
-  /**
-   * Re-encrypt the outer vault blob under a new master password.
-   * Does not rotate the file DEK. Session stays unlocked on success.
-   */
-  changeMasterPassword: (current: string, next: string) => Promise<void>
-  /**
-   * Encrypt the live vault (no recycle bin) as a CKV2 blob for download.
-   * Uses the current master password.
-   */
-  exportEncryptedVault: () => Promise<EncryptedVaultBlob>
-  /**
-   * Decrypt an exported CKV2 blob and merge into a new isolated root folder.
-   * Returns the path of that folder. Existing paths are never overwritten.
-   */
-  importEncryptedVault: (
-    blob: EncryptedVaultBlob,
-    password: string
+  putEncryptedFile: (path: string, json: JsonValue, options?: { icon?: string }) => Promise<void>
+  /** Change keys/factors (password, Secret Key, Recovery Key, email slot, passkeys). */
+  rekey: (options: RekeyOptions) => Promise<RekeyResult>
+  /** CKV3 export file (opens with this vault's Recovery Key). */
+  exportVault: () => Promise<Uint8Array>
+  /** Merge an export/import file; returns the folder that received it. */
+  importVault: (
+    blob: Uint8Array,
+    recoveryKeyText: string | null,
+    options?: { intoRoot?: boolean }
   ) => Promise<string>
+  accountRequest: <T = AccountStatus>(request: AccountRequest) => Promise<T>
+  /** Step-up: authKey proof from a freshly typed master password. */
+  passwordProof: (password: string) => Promise<{ authKey: string }>
+  /** Emergency Kit Secret Key (shown after step-up). */
+  secretKeyText: () => string
+  /** Stop trusting this browser for the current vault (local + server). */
+  forgetThisDevice: () => Promise<void>
+  refreshAccount: (account: Partial<AccountSummary>) => void
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null)
 
+function infoFrom(session: VaultSession): VaultInfo {
+  const labels = session.passkeyLabels
+  return {
+    name: session.name,
+    account: session.account,
+    device: session.device,
+    rev: session.header.rev,
+    requirePasskey: session.header.requirePasskey === true,
+    passkeys: (session.header.passkeys ?? []).map((p) => ({
+      id: p.id,
+      label: labels[p.id]?.label ?? "Passkey",
+      added: labels[p.id]?.added ?? "",
+    })),
+    hasEmailSlot: session.header.slots.some((slot) => slot.type === "email"),
+  }
+}
+
 export function VaultProvider({ children }: { children: ReactNode }) {
   const [payload, setPayload] = useState<VaultArchive | null>(null)
+  const [vault, setVault] = useState<VaultInfo | null>(null)
   const [lockReason, setLockReason] = useState<LockReason | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Kept out of React state so the password is never on the context value.
-  const masterPasswordRef = useRef<string | null>(null)
-  const fileDekKeyRef = useRef<CryptoKey | null>(null)
-  const fileDekBytesRef = useRef<Uint8Array | null>(null)
-  const objectKeyRef = useRef<string | null>(null)
+  // The session (and every key it holds) stays out of React state.
+  const sessionRef = useRef<VaultSession | null>(null)
 
-  const unlock = useCallback(async (password: string, vaultName: string) => {
-    const objectKey = toVaultObjectKey(vaultName)
-    const result = await unlockVault(password, objectKey)
-    fileDekKeyRef.current = result.fileDekKey
-    fileDekBytesRef.current = result.fileDekBytes
-    objectKeyRef.current = objectKey
-    masterPasswordRef.current = password
-    setPayload(result.payload)
-    setLockReason(null)
-    setSaveError(null)
+  const sync = useCallback((session: VaultSession) => {
+    setPayload(session.payload)
+    setVault(infoFrom(session))
   }, [])
 
+  const attach = useCallback(
+    (session: VaultSession) => {
+      sessionRef.current?.wipe()
+      sessionRef.current = session
+      sync(session)
+      setLockReason(null)
+      setSaveError(null)
+    },
+    [sync]
+  )
+
   const lock = useCallback((reason: LockReason = "manual") => {
-    // Best effort: zero raw key bytes before dropping the references.
-    fileDekBytesRef.current?.fill(0)
-    fileDekKeyRef.current = null
-    fileDekBytesRef.current = null
-    objectKeyRef.current = null
-    masterPasswordRef.current = null
+    sessionRef.current?.wipe()
+    sessionRef.current = null
     clearSecretClipboard()
     setPayload(null)
+    setVault(null)
     setLockReason(reason)
     setSaveError(null)
     setSaving(false)
@@ -119,186 +145,174 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     })
   }, [unlocked, lock])
 
-  const decryptFile = useCallback(async (path: string): Promise<JsonValue> => {
-    const archive = payload
-    const key = fileDekKeyRef.current
-    if (!archive || !key) {
-      throw new Error("Vault is locked.")
-    }
-    const node = getNode(archive, path)
-    if (!node || node.type !== "file") {
-      throw new Error(`Not a file: ${path}`)
-    }
-    return decryptFileJson(
-      { nonce: node.nonce, ciphertext: node.ciphertext },
-      key
-    )
-  }, [payload])
+  const requireSession = useCallback((): VaultSession => {
+    const session = sessionRef.current
+    if (!session) throw new Error("Vault is locked.")
+    return session
+  }, [])
+
+  /** Run a session operation; an ended session locks the app. */
+  const guarded = useCallback(
+    async <T,>(operation: (session: VaultSession) => Promise<T>): Promise<T> => {
+      const session = requireSession()
+      try {
+        return await operation(session)
+      } catch (error) {
+        if (isSessionExpired(error)) lock("expired")
+        throw error
+      }
+    },
+    [requireSession, lock]
+  )
+
+  const decryptFile = useCallback(
+    (path: string) => requireSession().decryptFile(path),
+    [requireSession]
+  )
 
   const commit = useCallback(
     async (mutator: (archive: VaultArchive) => void | Promise<void>) => {
-      const masterPassword = masterPasswordRef.current
-      if (
-        !payload ||
-        !masterPassword ||
-        !fileDekBytesRef.current ||
-        !objectKeyRef.current
-      ) {
-        throw new Error("Vault is locked.")
-      }
       setSaving(true)
       setSaveError(null)
-      const previous = payload
       try {
-        const next = structuredClone(payload)
-        await mutator(next)
-        await saveVault(
-          next,
-          fileDekBytesRef.current,
-          masterPassword,
-          objectKeyRef.current
-        )
-        setPayload(next)
-      } catch (err) {
-        setPayload(previous)
-        const message =
-          err instanceof Error ? err.message : "Failed to save vault."
-        setSaveError(message)
-        throw err
+        await guarded(async (session) => {
+          await session.save(mutator)
+          sync(session)
+        })
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : "Failed to save vault.")
+        throw error
       } finally {
         setSaving(false)
       }
     },
-    [payload]
+    [guarded, sync]
   )
 
   const putEncryptedFile = useCallback(
-    async (
-      path: string,
-      json: JsonValue,
-      options?: { icon?: string }
-    ) => {
-      const key = fileDekKeyRef.current
-      if (!key) throw new Error("Vault is locked.")
+    async (path: string, json: JsonValue, options?: { icon?: string }) => {
+      const key = requireSession().fileDekKey
       await commit(async (archive) => {
         const enc = await encryptFileJson(json, key)
         putFile(archive, path, { ...enc, icon: options?.icon })
       })
     },
-    [commit]
+    [commit, requireSession]
   )
 
-  const changeMasterPassword = useCallback(
-    async (current: string, next: string) => {
-      const masterPassword = masterPasswordRef.current
-      if (
-        !payload ||
-        !masterPassword ||
-        !fileDekBytesRef.current ||
-        !objectKeyRef.current
-      ) {
-        throw new Error("Vault is locked.")
-      }
-      if (current !== masterPassword) {
-        throw new Error("Invalid master password.")
-      }
-      if (!next) {
-        throw new Error("New password cannot be empty.")
-      }
-      if (next === masterPassword) {
-        throw new Error("New password must be different from the current one.")
-      }
+  const rekey = useCallback(
+    async (options: RekeyOptions) => {
       setSaving(true)
       setSaveError(null)
       try {
-        await saveVault(
-          payload,
-          fileDekBytesRef.current,
-          next,
-          objectKeyRef.current
-        )
-        masterPasswordRef.current = next
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to change master password."
-        setSaveError(message)
-        throw err
+        return await guarded(async (session) => {
+          const result = await session.rekey(options)
+          sync(session)
+          return result
+        })
       } finally {
         setSaving(false)
       }
     },
-    [payload]
+    [guarded, sync]
   )
 
-  const exportEncryptedVault = useCallback(async (): Promise<EncryptedVaultBlob> => {
-    const masterPassword = masterPasswordRef.current
-    if (!payload || !masterPassword || !fileDekBytesRef.current) {
-      throw new Error("Vault is locked.")
-    }
-    return buildExportBlob(payload, fileDekBytesRef.current, masterPassword)
-  }, [payload])
+  const exportVault = useCallback(() => guarded((session) => session.exportFile()), [guarded])
 
-  const importEncryptedVault = useCallback(
-    async (blob: EncryptedVaultBlob, password: string): Promise<string> => {
-      const key = fileDekKeyRef.current
-      if (!payload || !key) {
-        throw new Error("Vault is locked.")
+  const importVault = useCallback(
+    async (blob: Uint8Array, recoveryKeyText: string | null, options?: { intoRoot?: boolean }) => {
+      const recoveryKey = recoveryKeyText?.trim() ? parseKey("RK1", recoveryKeyText) : null
+      setSaving(true)
+      setSaveError(null)
+      try {
+        return await guarded(async (session) => {
+          const result = await session.importFile(blob, recoveryKey, options)
+          sync(session)
+          return result.folderPath
+        })
+      } finally {
+        setSaving(false)
       }
-      if (!password) {
-        throw new Error("Import password cannot be empty.")
-      }
-
-      let folderPath = ""
-      await commit(async (archive) => {
-        const result = await mergeImportIntoArchive(
-          archive,
-          key,
-          blob,
-          password
-        )
-        folderPath = result.folderPath
-      })
-      return folderPath
     },
-    [payload, commit]
+    [guarded, sync]
+  )
+
+  const accountRequest = useCallback(
+    <T,>(request: AccountRequest) => guarded((session) => session.accountRequest<T>(request)),
+    [guarded]
+  )
+
+  const passwordProof = useCallback(
+    (password: string) => guarded((session) => session.passwordProof(password)),
+    [guarded]
+  )
+
+  const secretKeyText = useCallback(() => requireSession().secretKeyText, [requireSession])
+
+  const forgetThisDevice = useCallback(async () => {
+    const session = requireSession()
+    forgetLocalDevice(session.name)
+    await sessionDeps.api.forgetDevice(session.name).catch(() => {})
+    session.setDevice({ trusted: false })
+    sync(session)
+  }, [requireSession, sync])
+
+  const refreshAccount = useCallback(
+    (account: Partial<AccountSummary>) => {
+      const session = sessionRef.current
+      if (!session) return
+      session.setAccount(account)
+      sync(session)
+    },
+    [sync]
   )
 
   const value = useMemo(
     () => ({
       unlocked,
       payload,
+      vault,
       lockReason,
       saving,
       saveError,
-      unlock,
+      attach,
       lock,
       decryptFile,
       commit,
       putEncryptedFile,
-      changeMasterPassword,
-      exportEncryptedVault,
-      importEncryptedVault,
+      rekey,
+      exportVault,
+      importVault,
+      accountRequest,
+      passwordProof,
+      secretKeyText,
+      forgetThisDevice,
+      refreshAccount,
     }),
     [
       unlocked,
       payload,
+      vault,
       lockReason,
       saving,
       saveError,
-      unlock,
+      attach,
       lock,
       decryptFile,
       commit,
       putEncryptedFile,
-      changeMasterPassword,
-      exportEncryptedVault,
-      importEncryptedVault,
+      rekey,
+      exportVault,
+      importVault,
+      accountRequest,
+      passwordProof,
+      secretKeyText,
+      forgetThisDevice,
+      refreshAccount,
     ]
   )
 
-  return (
-    <VaultContext.Provider value={value}>{children}</VaultContext.Provider>
-  )
+  return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>
 }
 
 export function useVault() {

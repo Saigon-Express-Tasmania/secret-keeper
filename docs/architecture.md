@@ -1,61 +1,64 @@
 # Architecture
 
-Credentials Keep is a small personal vault SPA. It stores encrypted secrets as a single blob on an external object store and unlocks them in the browser with a vault name plus master password. There are no user accounts and no server-side vault logic in the planned design.
+Credentials Keep is a small personal vault: a static React SPA plus one
+serverless function. All encryption happens in the browser; the server only
+stores ciphertext and enforces access rules (password proof, second factors,
+lockout, revision order). See [security.md](./security.md) for the threat
+model and [security-audit.md](./security-audit.md) for why it is built this way.
 
 ## Goals
 
-- Manage personal secrets: login passwords, auth keys, coin wallets, notes
-- Minimal UX: two screens only (Gate and Dashboard)
-- Host on Netlify as a static site
-- Pluggable storage backends (R2, S3, Supabase, Google Drive, …)
-- Mostly no login — vault name + master password is the unlock gate
+- Manage personal secrets: logins, auth keys, wallets, notes, TOTP seeds
+- Two screens: Gate (unlock / create / recover) and Dashboard
+- Static hosting on Netlify plus a single Function; R2 as the only datastore
+- Free tiers only: no database, no polling, no server-side key stretching
 
 ## High-level flow
 
 ```text
-Gate ──(vault name + master password)──► download vault blob (R2)
-                         │   + load local ciphertext cache
-                         ▼
-                    decrypt CKV2 (Argon2id + AES-GCM + env pepper)
-                         │   → unpack CKZ1 (unscramble + inflate)
-                         │   (legacy CKV1 migrates to archive)
-                         ▼
-                    merge (stub: remote wins) ──► refresh local cache
-                         │                       (+ upload if remote missing)
-                         │                       (+ prefixed backup if due)
-                         ▼
-                    Dashboard (in-memory VaultArchive VFS)
-                         │
-                    Lock ──► clear memory ──► Gate
+Gate: name + password
+  │  POST /prelogin → KDF params (fake but stable for unknown names)
+  │  Argon2id in the browser → authKey (to server) + pwKey (stays here)
+  │  POST /unlock {authKey [, TOTP | email token]} → session + server share P + blob
+  │      (second factor asked on untrusted devices; lockout after repeated failures)
+  ▼
+open CKV3 blob locally:
+  primary slot = pwKey ‖ Secret Key ‖ P [‖ passkey key]   (or email slot / recovery slot)
+  → vault key VK → body (CKZ1 archive) → per-file AES-GCM under the file DEK
+  ▼
+Dashboard: in-memory archive (names + file ciphertext); files decrypt on open
+  │  save: re-encrypt body with VK → PUT /blob (If-Match ETag, rev+1)
+  ▼
+Lock (manual, idle, pagehide, session end) → keys wiped from memory
 ```
-
-Storage is treated as a dumb blob store. The app never relies on the provider to understand vault contents. The decrypted shape is a nested folder/file JSON tree (see [data-model.md](./data-model.md)).
 
 ## Runtime pieces
 
 | Piece | Role |
 | --- | --- |
-| Gate | Collect vault name + master password; download + decrypt + merge |
-| Dashboard | Browse/create vault folders and files; decrypt-on-open account editor |
-| `VaultContext` | In-memory archive + master password + object key; cleared on lock |
-| `StorageStrategy` | Provider-specific download/upload/list/remove |
-| `lib/vault/fs` | Zip-like archive tree helpers |
-| `lib/crypto/pack` | CKZ1 compress + scramble |
-| `lib/crypto/vault` | Argon2id + AES-GCM encrypt/decrypt (CKV2) |
-| `lib/vault/persist` | Unlock orchestration |
-| `lib/vault/backup` | Login-time prefixed copies of the live vault blob |
-| `lib/storage/localCache` | Ciphertext replica in `localStorage` |
+| `src/screens/Gate.tsx` + `src/components/gate/*` | Unlock / create / recovery state machine, Emergency Kit |
+| `src/screens/Dashboard.tsx` | Explorer, editor, Tools menu, Security dialog |
+| `src/context/VaultContext.tsx` | React wrapper around one `VaultSession`; idle lock |
+| `src/lib/vault/vaultSession.ts` | Client protocol: create, unlock steps, save with conflict replay, re-key, export/import |
+| `src/lib/crypto/{kdf,keys,vaultFile}.ts` | Argon2id + HKDF, key slots, CKV3 body encryption |
+| `src/lib/crypto/{file,pack}.ts` | Per-file AES-GCM, CKZ1 pack (deflate, bounded inflate) |
+| `src/lib/api/client.ts` | Typed `/api/vault` client |
+| `src/lib/device/deviceStore.ts` | Trusted-device record (Secret Key + highest revision seen), 30 days |
+| `src/shared/*` | Isomorphic: CKV3 codec, API types, frames, vault names, bytes |
+| `netlify/functions/vault.mts` | Netlify adapter; edge rate limit |
+| `server/*` | Router, routes, verifiers, sealing, sessions, device cookies, lockout, backups, mail |
+| `scripts/ck-file.ts` | Builds encrypted import files from KeePass or the old format |
+| `scripts/dev-api.ts` | Local API server (file store) for development |
 
-## Trust model (summary)
+## Boundaries
 
-- Master password stays in the browser
-- Vault ciphertext can live on any storage provider
-- `VITE_VAULT_SALT_KEY` peppers key derivation and is never written into the blob
-- Provider credentials are currently modeled as `VITE_*` env vars for scaffolding; production should prefer Netlify Functions so secrets are not embedded in the client bundle (see [security.md](./security.md))
+- Browser code never imports `server/` or `netlify/` (`tests/boundaries.test.ts`).
+- Code bundled into the Function uses relative imports only.
+- No `VITE_*` variables: the build fails if one is set; `npm run check:bundle`
+  verifies the output.
 
-## Out of scope (current)
+## Out of scope
 
-- Real item-level merge
-- Netlify Functions (documented only)
-- Working S3 / Supabase / Drive adapters
+- Item-level merge between concurrent edits (saves replay on top of the latest version instead)
+- Offline unlock (by design: the primary slot needs the server share)
 - Searching inside encrypted file contents

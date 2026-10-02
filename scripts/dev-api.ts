@@ -6,7 +6,8 @@
  *   npm run dev:api -- --r2    # use the R2 bucket from .env.local
  *
  * Reads server settings from .env.local. Missing CK_SERVER_SECRET is generated
- * once into .local/dev-store; missing VAULT_SETUP_CODE defaults to "dev".
+ * once into the store directory (.local/dev-store, or CK_DEV_STORE); missing
+ * VAULT_SETUP_CODE defaults to "dev".
  * Emails are printed here instead of being sent (unless BREVO_API_KEY is set).
  */
 
@@ -28,7 +29,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const envFile = resolve(root, ".env.local")
 if (existsSync(envFile)) process.loadEnvFile(envFile)
 
-const storeDir = resolve(root, ".local", "dev-store")
+const storeDir = resolve(process.env.CK_DEV_STORE ?? resolve(root, ".local", "dev-store"))
 mkdirSync(storeDir, { recursive: true })
 
 if (!process.env.CK_SERVER_SECRET) {

@@ -1,7 +1,7 @@
 import {
   Download,
-  KeyRound,
   Loader2,
+  ShieldCheck,
   Upload,
   Wrench,
 } from "lucide-react"
@@ -20,7 +20,7 @@ type ToolsMenuProps = {
   exporting?: boolean
   onExport: () => void
   onImport: () => void
-  onChangePassword: () => void
+  onSecurity: () => void
 }
 
 export function ToolsMenu({
@@ -28,7 +28,7 @@ export function ToolsMenu({
   exporting = false,
   onExport,
   onImport,
-  onChangePassword,
+  onSecurity,
 }: ToolsMenuProps) {
   const busy = disabled || exporting
 
@@ -74,11 +74,11 @@ export function ToolsMenu({
         <DropdownMenuItem
           disabled={busy}
           onSelect={() => {
-            onChangePassword()
+            onSecurity()
           }}
         >
-          <KeyRound />
-          Change password
+          <ShieldCheck />
+          Security…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

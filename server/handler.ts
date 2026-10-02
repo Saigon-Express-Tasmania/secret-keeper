@@ -6,7 +6,12 @@
 import { API_PREFIX, CLIENT_HEADER, CLIENT_HEADER_VALUE } from "../src/shared/api"
 import type { HandlerDeps, Route, RouteContext } from "./context"
 import { errorResponse, HttpError } from "./http"
+import { account } from "./routes/account"
+import { getBlob, putBlob } from "./routes/blob"
+import { create } from "./routes/create"
+import { forgetDevice } from "./routes/device"
 import { prelogin } from "./routes/prelogin"
+import { unlock } from "./routes/unlock"
 
 export type { HandlerDeps } from "./context"
 
@@ -17,6 +22,11 @@ type Routes = Record<string, Partial<Record<string, Route>>>
 
 const ROUTES: Routes = {
   prelogin: { POST: prelogin },
+  unlock: { POST: unlock },
+  create: { POST: create },
+  blob: { GET: getBlob, PUT: putBlob },
+  account: { POST: account },
+  "device/forget": { POST: forgetDevice },
 }
 
 /** Requests must come from our own pages: same origin, custom header. */

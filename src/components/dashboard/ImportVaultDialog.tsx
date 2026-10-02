@@ -12,12 +12,14 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { describeError } from "@/lib/vault/errors"
+import { isCkv3 } from "@/shared/ckv3"
 
 type ImportVaultDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   busy?: boolean
-  onSubmit: (blob: Uint8Array, password: string) => Promise<void>
+  onSubmit: (blob: Uint8Array, recoveryKey: string | null, intoRoot: boolean) => Promise<void>
 }
 
 export function ImportVaultDialog({
@@ -29,7 +31,8 @@ export function ImportVaultDialog({
   const [fileInputKey, setFileInputKey] = useState(0)
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
-  const [password, setPassword] = useState("")
+  const [recoveryKey, setRecoveryKey] = useState("")
+  const [intoRoot, setIntoRoot] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [prevOpen, setPrevOpen] = useState(open)
 
@@ -38,7 +41,8 @@ export function ImportVaultDialog({
     if (open) {
       setFileName(null)
       setFileBytes(null)
-      setPassword("")
+      setRecoveryKey("")
+      setIntoRoot(false)
       setError(null)
       setFileInputKey((k) => k + 1)
     }
@@ -53,8 +57,16 @@ export function ImportVaultDialog({
       return
     }
     try {
-      const buffer = await file.arrayBuffer()
-      setFileBytes(new Uint8Array(buffer))
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      if (!isCkv3(bytes)) {
+        setFileBytes(null)
+        setFileName(null)
+        setError(
+          "This is not a Keep export. Old .ckv exports must be converted first: npm run ck-file -- from-legacy --file <file>."
+        )
+        return
+      }
+      setFileBytes(bytes)
       setFileName(file.name)
     } catch {
       setFileName(null)
@@ -66,23 +78,15 @@ export function ImportVaultDialog({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
-
-    if (!fileBytes || fileBytes.length === 0) {
-      setError("Choose an encrypted vault file to import.")
+    if (!fileBytes) {
+      setError("Choose an export or import file (.ckx).")
       return
     }
-    if (!password) {
-      setError("Enter the password used when the file was exported.")
-      return
-    }
-
     try {
-      await onSubmit(fileBytes, password)
+      await onSubmit(fileBytes, recoveryKey.trim() || null, intoRoot)
       onOpenChange(false)
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to import vault."
-      )
+      setError(describeError(err))
     }
   }
 
@@ -91,46 +95,51 @@ export function ImportVaultDialog({
       <DialogContent showCloseButton={!busy}>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Import encrypted vault</DialogTitle>
+            <DialogTitle>Import into this vault</DialogTitle>
             <DialogDescription>
-              Decrypt a previously exported Keep backup and place its contents
-              in a new isolated folder. Existing files are not overwritten.
+              Decrypts a Keep export (or a file made with the ck-file tool) and adds its
+              contents. Existing files are never overwritten.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 py-4">
             <div>
-              <Label htmlFor="import-vault-file">Encrypted file (.ckv)</Label>
+              <Label htmlFor="import-vault-file">File (.ckx)</Label>
               <Input
                 key={fileInputKey}
                 id="import-vault-file"
                 type="file"
-                accept=".ckv,application/octet-stream"
+                accept=".ckx,application/octet-stream"
                 onChange={handleFileChange}
                 disabled={busy}
                 className="mt-1.5 cursor-pointer"
               />
               {fileName ? (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Selected: {fileName}
-                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">Selected: {fileName}</p>
               ) : null}
             </div>
             <div>
-              <Label htmlFor="import-vault-password">
-                Export password
-              </Label>
+              <Label htmlFor="import-recovery-key">Recovery Key or import key</Label>
               <Input
-                id="import-vault-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="import-recovery-key"
+                value={recoveryKey}
+                onChange={(e) => setRecoveryKey(e.target.value)}
                 disabled={busy}
-                required
-                className="mt-1.5"
-                placeholder="Password used when exporting"
+                autoComplete="off"
+                spellCheck={false}
+                className="mt-1.5 font-mono"
+                placeholder="RK1-…  (leave empty for this vault's own exports)"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={intoRoot}
+                onChange={(e) => setIntoRoot(e.target.checked)}
+                disabled={busy}
+              />
+              Merge into the top level (moving an old vault here) instead of a new folder
+            </label>
             {error ? (
               <p className="text-sm text-destructive" role="alert">
                 {error}
@@ -138,18 +147,10 @@ export function ImportVaultDialog({
             ) : null}
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={busy}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={busy || !fileBytes || !password}
-            >
+            <Button type="submit" disabled={busy || !fileBytes}>
               {busy ? (
                 <>
                   <Loader2 className="animate-spin" />

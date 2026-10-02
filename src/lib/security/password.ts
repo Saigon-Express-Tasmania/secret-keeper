@@ -53,3 +53,25 @@ export function generatePassword(
   }
   return out
 }
+
+// --- Master password policy --------------------------------------------------
+
+export const MIN_MASTER_PASSWORD_LENGTH = 12
+
+/**
+ * Returns a reason the master password is unacceptable, or null.
+ * With a Secret Key and server share in every daily-unlock slot, offline
+ * guessing is off the table; this guards the online and server-compromise
+ * paths (email unlock) against trivially weak choices.
+ */
+export function masterPasswordProblem(password: string, vaultName?: string): string | null {
+  const normalized = password.normalize("NFKC")
+  if ([...normalized].length < MIN_MASTER_PASSWORD_LENGTH) {
+    return `Use at least ${MIN_MASTER_PASSWORD_LENGTH} characters.`
+  }
+  if (/^(.)\1+$/u.test(normalized)) return "Don't repeat a single character."
+  if (vaultName && normalized.toLowerCase() === vaultName.toLowerCase()) {
+    return "Don't use the vault name as the password."
+  }
+  return null
+}

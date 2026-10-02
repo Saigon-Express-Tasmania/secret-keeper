@@ -9,7 +9,6 @@ import {
 } from "lucide-react"
 
 import { AppBackdrop } from "@/components/AppBackdrop"
-import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterPasswordDialog"
 import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog"
 import {
   CreateNodeDialog,
@@ -30,6 +29,7 @@ import { SelectionToolbar } from "@/components/dashboard/SelectionToolbar"
 import { ToolsMenu } from "@/components/dashboard/ToolsMenu"
 import { UnsavedChangesDialog } from "@/components/dashboard/UnsavedChangesDialog"
 import type { AccountEditorHandle } from "@/components/editor/AccountEditor"
+import { SecurityDialog } from "@/components/security/SecurityDialog"
 import {
   createEmptyAccount,
   serializeAccount,
@@ -97,9 +97,8 @@ export function Dashboard() {
     saveError,
     commit,
     putEncryptedFile,
-    changeMasterPassword,
-    exportEncryptedVault,
-    importEncryptedVault,
+    exportVault,
+    importVault,
   } = useVault()
   const navigate = useNavigate()
 
@@ -132,7 +131,7 @@ export function Dashboard() {
   const [leavePending, setLeavePending] = useState<(() => void) | null>(null)
   const [leaveBusy, setLeaveBusy] = useState(false)
   const [decryptListing, setDecryptListing] = useState(readDecryptListingPref)
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [securityOpen, setSecurityOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const editorRef = useRef<AccountEditorHandle | null>(null)
@@ -189,7 +188,7 @@ export function Dashboard() {
   async function handleExport() {
     setExporting(true)
     try {
-      const blob = await exportEncryptedVault()
+      const blob = await exportVault()
       downloadBytes(blob, exportFilename())
     } catch (err) {
       const message =
@@ -200,9 +199,13 @@ export function Dashboard() {
     }
   }
 
-  async function handleImport(blob: Uint8Array, password: string) {
-    const folderPath = await importEncryptedVault(blob, password)
-    navigateTo(folderPath)
+  async function handleImport(
+    blob: Uint8Array,
+    recoveryKey: string | null,
+    intoRoot: boolean
+  ) {
+    const folderPath = await importVault(blob, recoveryKey, { intoRoot })
+    navigateTo(folderPath || (rootFolders[0]?.name ?? ""))
   }
 
   function navigateTo(path: string) {
@@ -600,7 +603,7 @@ export function Dashboard() {
           exporting={exporting}
           onExport={() => void handleExport()}
           onImport={() => setImportOpen(true)}
-          onChangePassword={() => setChangePasswordOpen(true)}
+          onSecurity={() => setSecurityOpen(true)}
         />
         <Button
           variant="outline"
@@ -799,12 +802,7 @@ export function Dashboard() {
         onDiscard={confirmLeaveDiscard}
         onCancel={() => setLeavePending(null)}
       />
-      <ChangeMasterPasswordDialog
-        open={changePasswordOpen}
-        onOpenChange={setChangePasswordOpen}
-        busy={saving}
-        onSubmit={changeMasterPassword}
-      />
+      <SecurityDialog open={securityOpen} onOpenChange={setSecurityOpen} />
       <ImportVaultDialog
         open={importOpen}
         onOpenChange={setImportOpen}

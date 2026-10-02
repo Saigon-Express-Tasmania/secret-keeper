@@ -205,6 +205,8 @@ export async function sealExportFile(options: {
   vaultKey: Uint8Array
   recoverySlot: Ckv3Slot
   archive: VaultArchive
+  /** Migration/import files carry the Recycle Bin; in-app exports do not. */
+  keepRecycleBin?: boolean
 }): Promise<Uint8Array<ArrayBuffer>> {
   const { keys: _keys, ...archive } = options.archive
   const header: Ckv3Header = {
@@ -214,7 +216,10 @@ export async function sealExportFile(options: {
     rev: 1,
     slots: [options.recoverySlot],
   }
-  return sealVaultFile(header, options.vaultKey, { ...archive, recycleBin: [] })
+  return sealVaultFile(header, options.vaultKey, {
+    ...archive,
+    recycleBin: options.keepRecycleBin ? (archive.recycleBin ?? []) : [],
+  })
 }
 
 export type ExportKey = { vaultKey: Uint8Array } | { recoveryKey: Uint8Array }

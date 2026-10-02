@@ -38,23 +38,23 @@ clearing), no password policy, and no browser security headers.
 
 | ID | Severity | Title | Status |
 |---|---|---|---|
-| F1 | Critical | Storage credentials are public | Open — Phase 4 |
-| F2 | Critical | The Argon2 pepper is public; password is the only offline barrier | Open — Phase 4 |
-| F3 | High | No password policy; a typo silently creates a vault | Open — Phase 4 |
-| F4 | High | Rollback and substitution of vault blobs | Open — Phase 4 |
-| F5 | High | Master password kept for the whole session | Partly fixed (Phase 1: off the context value) — Phase 4 |
+| F1 | Critical | Storage credentials are public | **Fixed** — Phase 4 |
+| F2 | Critical | The Argon2 pepper is public; password is the only offline barrier | **Fixed** — Phase 4 |
+| F3 | High | No password policy; a typo silently creates a vault | **Fixed** — Phase 4 |
+| F4 | High | Rollback and substitution of vault blobs | **Fixed** — Phase 4 |
+| F5 | High | Master password kept for the whole session | **Fixed** — Phases 1, 4 |
 | F6 | High | No auto-lock, clipboard never cleared | **Fixed** — Phase 1 |
 | F7 | High | No CSP or security headers | **Fixed** — Phase 1 |
-| F8 | Medium | Ciphertext cache never cleared | Open — Phase 4 |
-| F9 | Medium | Password change leaves old copies openable | Open — Phase 4 |
-| F10 | Medium | KDF parameters not agile; no Unicode normalization | Open — Phases 3, 4 |
-| F11 | Medium | Exports protected only by the master password | Open — Phase 4 |
-| F12 | Medium | KDBX importer leaks the password and overwrites the vault | Open — Phase 4 |
+| F8 | Medium | Ciphertext cache never cleared | **Fixed** — Phase 4 |
+| F9 | Medium | Password change leaves old copies openable | **Fixed** — Phase 4 |
+| F10 | Medium | KDF parameters not agile; no Unicode normalization | **Fixed** — Phases 3, 4 |
+| F11 | Medium | Exports protected only by the master password | **Fixed** — Phase 4 |
+| F12 | Medium | KDBX importer leaks the password and overwrites the vault | **Fixed** — Phase 4 |
 | F13 | Low | Password generator modulo bias | **Fixed** — Phase 0 |
 | F14 | Low | Unbounded decompression (zip bomb) | **Fixed** — Phase 0 |
 | F15 | Info | Per-file AES-GCM has no AAD | Accepted (rationale below) |
-| F16 | Low | Blob size and vault names visible to the provider | Open — Phase 4 |
-| F17 | Low | Errors classified by message text | Open — Phase 4 |
+| F16 | Low | Blob size and vault names visible to the provider | **Mitigated** — Phase 4 |
+| F17 | Low | Errors classified by message text | **Fixed** — Phase 4 |
 | F18 | Low | Build not pinned to the lockfile | **Fixed** — Phase 0 |
 
 ### F1 — Storage credentials are public (Critical)

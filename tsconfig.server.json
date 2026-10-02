@@ -25,7 +25,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["server", "netlify", "scripts", "tests"],
-  // Legacy importer (uses import.meta.env); replaced by scripts/ck-file.ts.
-  "exclude": ["scripts/import-kdbx.ts"]
+  "include": ["server", "netlify", "scripts", "tests"]
 }

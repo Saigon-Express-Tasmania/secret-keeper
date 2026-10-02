@@ -1,21 +1,14 @@
 /**
- * Encrypted vault export/import helpers.
- * Export packs a CKV2 blob (same format as vault.enc).
- * Import decrypts a backup and re-encrypts file bodies under the live DEK
- * into a new unique root folder so existing paths are never overwritten.
+ * Export/import helpers.
+ * Exports are CKV3 files (see sealExportFile); this module prepares the
+ * archive for export and merges a decrypted import into the live vault,
+ * re-encrypting every file body under the live file DEK.
  */
 
-import {
-  decryptFileJson,
-  encryptFileJson,
-} from "@/lib/crypto/file"
-import {
-  decryptVault,
-  encryptVault,
-  type EncryptedVaultBlob,
-} from "@/lib/crypto/vault"
+import { decryptFileJson, encryptFileJson } from "@/lib/crypto/file"
 import {
   copyNodeMeta,
+  getNode,
   joinPath,
   mkdir,
   pathBasename,
@@ -23,134 +16,128 @@ import {
   uniqueSiblingPath,
   type FsDir,
   type FsNode,
+  type RawVaultArchive,
+  type RecycleBinEntry,
   type VaultArchive,
 } from "@/lib/vault/fs"
-import {
-  archiveForSave,
-  prepareSessionArchive,
-} from "@/lib/vault/session"
+import { archiveForSave, prepareSessionArchive } from "@/lib/vault/session"
 
-/** Build a pack-ready archive for export (live workspace only; no recycle bin). */
+/** Pack-ready archive for export: live workspace only, no recycle bin, no vault keys. */
 export function archiveForExport(
   payload: VaultArchive,
   fileDekBytes: Uint8Array
 ): VaultArchive {
-  const packed = archiveForSave(payload, fileDekBytes)
-  return {
-    ...packed,
-    recycleBin: [],
-  }
+  return { ...archiveForSave(payload, fileDekBytes), recycleBin: [] }
 }
 
-/** Encrypt the current vault as a downloadable CKV2 blob. */
-export async function buildExportBlob(
-  payload: VaultArchive,
-  fileDekBytes: Uint8Array,
-  masterPassword: string
-): Promise<EncryptedVaultBlob> {
-  return encryptVault(archiveForExport(payload, fileDekBytes), masterPassword)
-}
-
-function todayStamp(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
+function todayStamp(date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
 }
 
 /** Suggested download filename for an export. */
 export function exportFilename(date = new Date()): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `keep-export-${y}-${m}-${day}.ckv`
+  return `keep-export-${todayStamp(date)}.ckx`
+}
+
+/** Re-encrypt one file or folder under another file DEK. */
+export async function reencryptNode(
+  node: FsNode,
+  sourceKey: CryptoKey,
+  destKey: CryptoKey
+): Promise<FsNode> {
+  if (node.type === "dir") return reencryptTree(node, sourceKey, destKey)
+  const json = await decryptFileJson({ nonce: node.nonce, ciphertext: node.ciphertext }, sourceKey)
+  const enc = await encryptFileJson(json, destKey)
+  return { type: "file", nonce: enc.nonce, ciphertext: enc.ciphertext, ...copyNodeMeta(node) }
 }
 
 /**
- * Re-encrypt an imported directory tree under the destination DEK.
- * Preserves names, icons, and folder structure; never copies ciphertext as-is.
+ * Re-encrypt a directory tree under another file DEK.
+ * Preserves names, icons and folder structure; never copies ciphertext as-is.
  */
-async function reencryptTree(
+export async function reencryptTree(
   from: FsDir,
   sourceKey: CryptoKey,
   destKey: CryptoKey
 ): Promise<FsDir> {
   const entries: Record<string, FsNode> = {}
-
   for (const [name, child] of Object.entries(from.entries)) {
-    if (child.type === "dir") {
-      entries[name] = await reencryptTree(child, sourceKey, destKey)
-    } else {
-      const json = await decryptFileJson(
-        { nonce: child.nonce, ciphertext: child.ciphertext },
-        sourceKey
-      )
-      const enc = await encryptFileJson(json, destKey)
-      entries[name] = {
-        type: "file",
-        nonce: enc.nonce,
-        ciphertext: enc.ciphertext,
-        ...copyNodeMeta(child),
-      }
-    }
+    entries[name] = await reencryptNode(child, sourceKey, destKey)
   }
+  return { type: "dir", entries, ...copyNodeMeta(from) }
+}
 
-  return {
-    type: "dir",
-    entries,
-    ...copyNodeMeta(from),
+/** Merge `incoming` into `dest`: folders merge, colliding files get "(imported)". */
+function mergeDirInto(archive: VaultArchive, destPath: string, incoming: FsDir): void {
+  for (const [name, child] of Object.entries(incoming.entries)) {
+    if (child.type === "dir") {
+      const existing = getNode(archive, joinPath(destPath, name))
+      const target =
+        existing?.type === "file"
+          ? uniqueSiblingPath(archive, destPath, name, "imported")
+          : joinPath(destPath, name)
+      mkdir(archive, target, child.icon ? { icon: child.icon } : undefined)
+      mergeDirInto(archive, target, child)
+    } else {
+      placeNode(archive, uniqueSiblingPath(archive, destPath, name, "imported"), child)
+    }
   }
 }
 
 export type ImportIntoFolderResult = {
-  /** Path of the new isolated root folder. */
+  /** Folder that received the import ("" when merged into the root). */
   folderPath: string
+  files: number
+}
+
+function countFiles(node: FsNode): number {
+  if (node.type === "file") return 1
+  return Object.values(node.entries).reduce((sum, child) => sum + countFiles(child), 0)
 }
 
 /**
- * Decrypt an exported CKV2 blob and merge its root entries into a new
- * unique folder under the live vault. Existing paths are never overwritten.
+ * Merge a decrypted export/import archive into the live vault.
+ * Default: a new "Imported <date>" folder (existing paths never overwritten).
+ * intoRoot: merge into the root (used for the one-time legacy migration).
+ * Recycle-bin entries come along, re-encrypted, under fresh ids.
  */
 export async function mergeImportIntoArchive(
   liveArchive: VaultArchive,
   liveDekKey: CryptoKey,
-  blob: EncryptedVaultBlob,
-  importPassword: string
+  raw: RawVaultArchive,
+  options: { intoRoot?: boolean } = {}
 ): Promise<ImportIntoFolderResult> {
-  const raw = await decryptVault(blob, importPassword)
   const prepared = await prepareSessionArchive(raw)
+  const reencrypted = await reencryptTree(prepared.payload.root, prepared.fileDekKey, liveDekKey)
 
-  const folderName = `Imported ${todayStamp()}`
-  const folderPath = uniqueSiblingPath(
-    liveArchive,
-    "",
-    folderName,
-    "imported"
-  )
-  const leafName = pathBasename(folderPath)
-
-  mkdir(liveArchive, folderPath, {
-    icon: "fluent-color:document-folder-16",
-  })
-
-  const reencrypted = await reencryptTree(
-    prepared.payload.root,
-    prepared.fileDekKey,
-    liveDekKey
-  )
-
-  for (const [name, child] of Object.entries(reencrypted.entries)) {
-    placeNode(liveArchive, joinPath(folderPath, name), child)
-  }
-
-  // Apply folder icon/meta on the destination leaf if the import had root meta
-  const dest = liveArchive.root.entries[leafName]
-  if (dest && dest.type === "dir") {
-    if (!dest.icon) {
+  let folderPath = ""
+  if (options.intoRoot) {
+    mergeDirInto(liveArchive, "", reencrypted)
+  } else {
+    folderPath = uniqueSiblingPath(liveArchive, "", `Imported ${todayStamp()}`, "imported")
+    mkdir(liveArchive, folderPath, { icon: "fluent-color:document-folder-16" })
+    for (const [name, child] of Object.entries(reencrypted.entries)) {
+      placeNode(liveArchive, joinPath(folderPath, name), child)
+    }
+    const dest = liveArchive.root.entries[pathBasename(folderPath)]
+    if (dest && dest.type === "dir" && !dest.icon) {
       dest.icon = "fluent-color:document-folder-16"
     }
   }
 
-  return { folderPath }
+  const bin: RecycleBinEntry[] = liveArchive.recycleBin ?? []
+  for (const entry of prepared.payload.recycleBin ?? []) {
+    bin.push({
+      id: crypto.randomUUID(),
+      originalPath: joinPath(folderPath, entry.originalPath),
+      deletedAt: entry.deletedAt,
+      node: await reencryptNode(entry.node, prepared.fileDekKey, liveDekKey),
+    })
+  }
+  liveArchive.recycleBin = bin
+
+  return { folderPath, files: countFiles(reencrypted) }
 }

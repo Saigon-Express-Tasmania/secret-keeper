@@ -1,75 +1,100 @@
 # Security
 
-> **Audit:** see [security-audit.md](./security-audit.md) for the current findings and their remediation status. Sections below describe the design as it is today; they are rewritten as the remediation phases land.
+Credentials Keep encrypts everything in the browser. The server (one Netlify
+Function) stores ciphertext and enforces who may fetch it; the storage
+provider only ever sees ciphertext and sealed metadata. The findings that
+shaped this design are in [security-audit.md](./security-audit.md).
 
-Credentials Keep is designed so that **storage providers never see plaintext secrets**. The master password and any decrypted file body live only in the browser session.
+## Threat model
 
-## Principles
+| Adversary | Has | Protection |
+| --- | --- | --- |
+| Anyone on the internet | The public JS bundle; can call the API | No secrets in the bundle; API needs a password proof, a second factor off-device, and is rate-limited and locked out after repeated failures |
+| Storage leak (R2 bucket, backups) | Every object and its metadata | Every blob needs the Secret Key (or the email share, sealed with a key R2 never sees) besides the password; verifiers are keyed HMACs |
+| Someone who learned the master password | The password | Also needs the Secret Key (or the email link), plus TOTP when enabled |
+| Thief of a trusted device / browser profile | Secret Key + device cookie | Still needs the password; guesses are online only (P is server-held), and the device is revoked after 5 failures |
+| Passer-by at an unlocked session | The open tab | Idle auto-lock, lock on `pagehide`, clipboard auto-clear, password re-entry for every security change |
+| Whoever controls the Netlify site | The code users run | Out of scope: a web-delivered vault trusts the code it is served |
 
-1. **No app accounts** — unlock is the vault name (object key) plus master password.
-2. **Client-side crypto** — encrypt before upload; decrypt after download.
-3. **Opaque blob** — providers store ciphertext bytes only.
-4. **Per-file encryption** — after unlock, the explorer holds folder/file **names** and **file ciphertext**, not every secret in plaintext.
-5. **Decrypt on open** — opening a file AES-GCM-decrypts that one body into viewer-local state; navigating away or Lock clears it.
-6. **Lock clears memory** — payload, master password, object key, file DEK refs, and open-file plaintext are dropped.
+## Gates
 
-## Crypto
+| Gate | Kind | Required when |
+| --- | --- | --- |
+| Master password | Cryptographic (Argon2id → pwKey) + server proof (authKey) | Always |
+| Secret Key `SK1-…` | Cryptographic, 128-bit | Daily unlock (remembered on trusted devices) |
+| Server share P | Cryptographic, held by the server | Every password unlock — makes offline guessing impossible |
+| Recovery Key `RK1-…` | Cryptographic, 256-bit | Break-glass alternative to all of the above |
+| Trusted device (30 days) | Access control (cookie) + local Secret Key | Skips the second factor; expires after a fixed 30 days |
+| Lockout | Access control | Failures 1–5 free, then `min(2^(n-6) min, 4 h)` |
 
-### Outer blob (CKV2)
+Additional gates (authenticator-app TOTP, email sign-in link, passkey) are
+described below as they are enabled.
 
-Implemented in `src/lib/crypto/vault.ts` and `src/lib/crypto/pack.ts`.
+## Cryptography
 
-| Step | Approach |
-| --- | --- |
-| Archive | Zip-like JSON tree (`VaultArchive` v3) |
-| Pack | CKZ1: `deflate-raw` + reversible byte scramble (obscurity only) |
-| Key derivation | Argon2id (`t=3`, `m=65536` KiB ≈ 64 MiB, `p=1`, 32-byte output) |
-| Pepper | `VITE_VAULT_SALT_KEY` passed as Argon2 `key` (not written into the blob) |
-| Salt | 16 random bytes per encrypt, stored in the blob header |
-| Encryption | AES-256-GCM with 12-byte nonce; AAD = magic + format version |
-| Blob format | `CKV2` + version + KDF id + salt + nonce + ciphertext+tag (plaintext = CKZ1) |
+See [data-model.md](./data-model.md) for byte layouts.
 
-### Per-file (inside archive)
+- **KDF.** Argon2id (`m=64 MiB, t=3, p=1`), NFKC-normalized password, one run
+  per unlock, split with HKDF into `authKey` (sent) and `pwKey` (kept).
+  Parameters live in the header so they can be raised later; decoding enforces
+  bounds. There is no pepper: the old `VITE_VAULT_SALT_KEY` was public.
+- **Key slots.** A random vault key VK is wrapped (AES-256-GCM, AAD bound to
+  slot type and vault id) by a KEK derived with one HKDF over the fixed-length
+  concatenation of the slot's factors: primary = password key ‖ Secret Key ‖
+  server share P; recovery = Recovery Key.
+- **Body.** AES-256-GCM under `HKDF(VK)`; the whole header is the AAD, so any
+  header change makes the body fail to open. Plaintext is padded to 16 KiB.
+- **Files.** Each file is AES-256-GCM under a random file DEK stored in the
+  body; bodies decrypt only when opened. Per-file AAD is not used: file
+  ciphertexts only exist inside the authenticated body (audit F15).
+- **Re-keying.** Changing the password, Secret Key or Recovery Key re-wraps
+  the slots and always mints a new server share, so every older blob, backup
+  or cached copy stops opening (the server no longer releases the old share).
+  "Rotate all keys" also replaces VK and the file DEK.
+- **Key commitment.** AES-GCM is not key-committing; a malicious server could
+  in theory craft a slot that opens under two keys, but it already sees the
+  authKey, so it gains nothing it could not get by guessing passwords.
 
-Implemented in `src/lib/crypto/file.ts`.
+## Server rules
 
-| Step | Approach |
-| --- | --- |
-| File DEK | Random 32-byte key stored in packed archive as `fileDek` (base64) |
-| Session | DEK imported as non-extractable `CryptoKey`; **not** left on the React `payload` |
-| File body | AES-256-GCM with unique nonce; tree stores `nonce` + `ciphertext` only |
+- **Verifiers.** `HMAC(k_ver, kind ‖ vaultId ‖ authKey)` in the vault object's
+  metadata; constant-time comparison.
+- **Enumeration.** `prelogin` returns stable fake parameters for unknown names
+  and `unlock` answers them like a wrong password, without writing anything.
+  (Response timing may still differ slightly.)
+- **Sessions.** Stateless HMAC tokens (12 h) sent as a Bearer header, bound to
+  vault name, vault id and auth epoch. Every re-key bumps the epoch, ending all
+  other sessions.
+- **Saves.** `If-Match` compare-and-swap; the revision must be exactly
+  previous + 1, the vault id unchanged, and the slot structure unchanged unless
+  the request is a re-key with step-up proof (password or Recovery Key).
+- **Requests.** Same origin only (`Origin`, `Sec-Fetch-Site`), a custom header,
+  typed content types, size caps, no CORS headers, `Cache-Control: no-store`.
+- **Rate limits.** Netlify edge limit (60 requests/min per IP) plus per-vault
+  lockout stored in `meta/{name}.json` with compare-and-swap, so parallel
+  guesses cannot exceed it.
+- **Vault creation** requires `VAULT_SETUP_CODE`.
+- **Backups** are made server-side before overwrites; see [storage.md](./storage.md).
 
-Per-file encryption is defense in depth against accidental leaks (React DevTools dumping `payload`, logging the tree). A heap dump while unlocked can still reach the DEK and master password; Lock still clears both. Argon2id is **not** run per file (that would make open/save unusable).
+## Browser hardening
 
-Legacy `CKV1` blobs and archive v2 plaintext files still decrypt and migrate to v3 on unlock. New writes always use CKV2 + archive v3.
+- Strict CSP (`default-src 'none'`, scripts and connections to self only),
+  `frame-ancestors 'none'`, `nosniff`, `no-referrer`, COOP, HSTS.
+- The build fails if any `VITE_*` variable is set; `npm run check:bundle`
+  scans `dist/` for storage hosts, request signing and secret names.
+- No ciphertext cache: the old `localStorage` vault copies are purged at
+  startup. A trusted device stores only the Secret Key and the highest revision
+  seen (rollback detection), for 30 days.
+- Session keys live outside React state and are wiped on lock; the master
+  password is not kept after unlock.
+- Copied secrets are wiped from the clipboard after 30 s.
 
-Wrong password or wrong env pepper fails GCM authentication and surfaces as **Invalid master password.**
+## Residual risks
 
-Changing the master password (Dashboard → Change password) re-wraps the outer CKV2 blob only; per-file bodies and the file DEK are unchanged. A failed upload keeps the previous session password.
-
-The master password must never be sent to Netlify, R2, S3, Supabase, or Google Drive as part of vault unlock.
-
-## Local replica
-
-A ciphertext-only copy is kept in `localStorage` (`credentials-keep:vault:<objectKey>`). Unlock always tries to merge local and remote (stub currently prefers remote). Password and derived keys are never written to disk.
-
-## Env credentials tradeoff
-
-Vite embeds any `VITE_*` variable into the client bundle. That is convenient for scaffolding and matches “credentials in `.env`,” but **storage API secrets must not ship to end-user browsers** in production.
-
-Recommended production shape:
-
-```text
-Browser ──► Netlify Function ──► Storage provider
-              (server env secrets)
-```
-
-The browser still downloads ciphertext only; Functions hold provider keys. Until Functions exist, treat `.env` values as local/dev placeholders and never commit them (`.gitignore` excludes `.env`).
-
-## Additional hardening (future)
-
-- Auto-lock after idle timeout
-- Optional clipboard clear after copy
-- Warn when serving over non-HTTPS
-- Integrity checks beyond GCM (e.g. separate MAC versioning)
-- Item-level merge instead of remote-wins stub
+- **Hosting compromise.** Whoever can change the deployed site can serve code
+  that captures passwords. Use a strong Netlify account (2FA) and review deploys.
+- **Recovery Key.** It alone opens any copy of the vault. Keep it offline.
+- **Clipboard history.** OS clipboard history or sync may keep copies.
+- **Timing.** Response latency may hint whether a vault name exists.
+- **Old copies.** Blobs from before the migration were readable by anyone with
+  the bundle; if the old password was weak, rotate the credentials inside.
