@@ -523,6 +523,17 @@ export function useFinderController(archive: VaultArchive): FinderController {
     if (lockPending && !busy) doLock()
   }, [busy, doLock, lockPending])
 
+  // Warn before closing the tab mid-save or with an edited account.
+  const unsaved = busy || editorDirty
+  useEffect(() => {
+    if (!unsaved) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [unsaved])
+
   const { exportEncryptedVault, importEncryptedVault } = vault
   const exportVault = useCallback(async () => {
     setExporting(true)

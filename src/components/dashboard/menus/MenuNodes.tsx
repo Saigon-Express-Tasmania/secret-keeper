@@ -119,7 +119,7 @@ export function MenuNodes({ nodes, flavor }: { nodes: MenuNode[]; flavor: MenuFl
         return <kit.Label key={`label-${index}`}>{node.label}</kit.Label>
       case "sub":
         return (
-          <kit.Sub key={`sub-${node.label}`}>
+          <kit.Sub key={`sub-${index}-${node.label}`}>
             <kit.SubTrigger disabled={node.disabled}>{node.label}</kit.SubTrigger>
             <kit.SubContent>{tidy(node.children).map(render)}</kit.SubContent>
           </kit.Sub>

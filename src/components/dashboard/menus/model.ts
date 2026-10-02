@@ -210,13 +210,19 @@ export function actionMenu(c: FinderController): MenuNode[] {
 
 /** Narrow screens have no menu bar: the ⋯ menu carries everything. */
 export function mobileMenu(c: FinderController): MenuNode[] {
+  const { mode } = c.model
+  let base: MenuNode[]
+  if (mode === "file" || c.model.selectedItems.length > 0) base = actionMenu(c)
+  else if (mode === "folder") base = [cmd("file.newFolder"), cmd("file.newAccount"), sep, cmd("edit.paste"), sep, cmd("file.getInfo")]
+  else if (mode === "trash") base = [cmd("file.emptyTrash")]
+  else base = []
   return [
-    ...actionMenu(c),
+    ...base,
     sep,
     { type: "sub", label: "View", children: viewMenu(c) },
     { type: "sub", label: "Go", children: goMenu(c) },
     { type: "sub", label: "Vault", children: appMenu() },
-    ...(c.model.mode !== "file"
+    ...(mode !== "file"
       ? [
           sep,
           {

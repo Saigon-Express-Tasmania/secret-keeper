@@ -31,7 +31,7 @@ export function MacWindow({
       className={cn(
         "relative flex overflow-hidden bg-mac-content text-mac-label md:rounded-window md:shadow-mac-window",
         "transition-[opacity,transform] duration-200 motion-reduce:transition-none",
-        minimized && "pointer-events-none translate-y-6 scale-[0.96] opacity-0",
+        minimized ? "pointer-events-none translate-y-6 scale-[0.96] opacity-0" : "pointer-events-auto",
         className
       )}
     >

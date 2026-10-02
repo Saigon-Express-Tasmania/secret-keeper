@@ -20,7 +20,7 @@ export const menuIndicatorClass =
   "pointer-events-none absolute left-[5px] flex size-3 items-center justify-center"
 
 export const menuShortcutClass =
-  "ml-auto pl-6 text-[12px] tracking-[0.08em] text-mac-label-3 group-data-highlighted:text-white/80"
+  "ml-auto pl-6 text-[12px] tracking-[0.08em] text-mac-label-3 group-data-highlighted:text-white/80 pointer-coarse:hidden"
 
 export const menuSeparatorClass = "mx-2.5 my-[5px] h-px bg-mac-separator"
 

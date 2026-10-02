@@ -20,7 +20,7 @@ export function KeyboardShortcutsDialog() {
   const c = useFinder()
   return (
     <Dialog open={c.dialogs.shortcutsOpen} onOpenChange={c.dialogs.setShortcutsOpen}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogTitle>Keyboard Shortcuts</DialogTitle>
         <DialogDescription>
           {IS_MAC

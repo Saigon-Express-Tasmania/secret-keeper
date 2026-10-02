@@ -138,7 +138,7 @@ export function FinderToolbar() {
             void c.setQuery("")
             c.focusContent()
           }}
-          className="ml-1 w-32 shrink-0 transition-[width] duration-200 sm:w-40 md:w-44 md:focus-within:w-56"
+          className="ml-1 w-30 shrink-0 transition-[width] duration-200 sm:w-40 md:w-44 md:focus-within:w-56"
         />
       ) : null}
     </header>

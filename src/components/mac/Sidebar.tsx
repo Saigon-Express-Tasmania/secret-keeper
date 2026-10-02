@@ -60,6 +60,7 @@ export function SidebarItem({
       <button
         type="button"
         aria-current={active ? "page" : undefined}
+        onMouseDown={(e) => e.preventDefault()}
         className={cn(
           "mx-2.5 flex h-7 w-[calc(100%-1.25rem)] items-center gap-2 rounded-[5px] px-2 text-left text-[13px] text-mac-label outline-none select-none focus-visible:ring-[3px] focus-visible:ring-mac-focus pointer-coarse:h-10",
           active ? "bg-mac-sidebar-selection" : "hover:bg-mac-hover",

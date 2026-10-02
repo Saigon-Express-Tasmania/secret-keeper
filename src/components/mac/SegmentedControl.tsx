@@ -52,6 +52,7 @@ export function SegmentedControl<T extends string>({
           disabled={item.disabled}
           aria-label={item.label}
           title={iconOnly ? item.label : undefined}
+          onMouseDown={(e) => e.preventDefault()}
           className={cn(
             "flex h-full min-w-0 items-center justify-center gap-1 rounded-[5px] text-mac-label-2 transition-colors outline-none select-none hover:text-mac-label focus-visible:ring-[3px] focus-visible:ring-mac-focus disabled:opacity-35 data-[state=on]:bg-mac-control data-[state=on]:text-mac-label data-[state=on]:shadow-[0_0_0_0.5px_rgb(0_0_0/0.1),0_1px_2px_rgb(0_0_0/0.12)] dark:data-[state=on]:bg-white/25 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:stroke-[1.75]",
             size === "sm" ? "px-2 text-[11px]" : "px-2.5 text-[12px]",

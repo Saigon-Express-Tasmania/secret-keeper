@@ -68,7 +68,7 @@ export function FinderSidebar() {
       data-open={c.win.drawerOpen || undefined}
       className={cn(
         "relative flex shrink-0 flex-col border-r border-mac-separator bg-mac-sidebar backdrop-blur-2xl backdrop-saturate-150",
-        "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-72! max-md:-translate-x-full max-md:bg-mac-content max-md:shadow-2xl max-md:transition-transform max-md:data-open:translate-x-0",
+        "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-72! max-md:-translate-x-full max-md:bg-mac-content max-md:transition-transform max-md:data-open:translate-x-0 max-md:data-open:shadow-2xl",
         !c.prefs.sidebar && "md:hidden"
       )}
       style={{ width }}

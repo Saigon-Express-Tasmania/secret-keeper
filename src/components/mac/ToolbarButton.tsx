@@ -25,6 +25,7 @@ export function ToolbarButton({
       aria-label={label}
       title={label}
       aria-pressed={pressed}
+      onMouseDown={(e) => e.preventDefault()}
       className={cn(
         "flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-[6px] px-1.5 text-mac-label-2 transition-colors outline-none select-none hover:bg-mac-hover hover:text-mac-label focus-visible:ring-[3px] focus-visible:ring-mac-focus active:bg-mac-sidebar-selection disabled:pointer-events-none disabled:opacity-30 aria-pressed:bg-mac-sidebar-selection aria-pressed:text-mac-label data-[state=open]:bg-mac-sidebar-selection pointer-coarse:h-9 pointer-coarse:min-w-9 [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:stroke-[1.6]",
         className

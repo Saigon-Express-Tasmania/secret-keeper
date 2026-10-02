@@ -31,6 +31,7 @@ export function PathBar({ segments }: { segments: PathBarSegment[] }) {
               type="button"
               onClick={seg.onActivate}
               aria-current={last ? "location" : undefined}
+              onMouseDown={(e) => e.preventDefault()}
               className={cn(
                 "flex h-5 min-w-0 items-center gap-1 rounded-[4px] px-1 outline-none select-none hover:bg-mac-hover focus-visible:ring-2 focus-visible:ring-mac-focus",
                 last ? "shrink-0 text-mac-label" : "shrink",

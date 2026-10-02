@@ -41,7 +41,7 @@ export function FinderApp({ archive }: { archive: VaultArchive }) {
       >
         <div
           className={cn(
-            "absolute inset-0 flex",
+            "pointer-events-none absolute inset-0 flex",
             c.prefs.zoomed ? "md:p-0" : "md:px-[4vw] md:pt-9 md:pb-12 xl:px-[7vw]"
           )}
         >

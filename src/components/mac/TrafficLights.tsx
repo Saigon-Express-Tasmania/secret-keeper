@@ -38,6 +38,7 @@ export function TrafficLights({
     >
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         aria-label={labels?.close ?? "Close"}
         title={labels?.close ?? "Close"}
         onClick={onClose}
@@ -53,6 +54,7 @@ export function TrafficLights({
       </button>
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         aria-label={labels?.minimize ?? "Minimize"}
         title={labels?.minimize ?? "Minimize"}
         onClick={onMinimize}
@@ -65,6 +67,7 @@ export function TrafficLights({
       </button>
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         aria-label={labels?.zoom ?? "Zoom"}
         title={labels?.zoom ?? "Zoom"}
         aria-pressed={zoomed}
