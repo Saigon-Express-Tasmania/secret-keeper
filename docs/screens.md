@@ -111,6 +111,7 @@ Tools → Security…. Every change asks for the master password again (step-up)
 | Email | **Add / Change**: address + master password, then the 6-digit code mailed to it (the old address keeps working until then and is told about the change). **Remove** (only with email unlock off). **Email unlock** on/off: re-keys the vault to add or drop the email slot |
 | Passkeys | Shown when the browser supports passkeys. **Add passkey**: name + master password (checked first), then "Create passkey". **Require passkey** / **Stop requiring**. **Remove** (not the last one while required) |
 | Emergency Kit | Show Secret Key (password checked by the server); New Secret Key; New Recovery Key (each shows the new kit once) |
+| Rotate all keys | Master password + "Also sign out all trusted devices": new vault key, file key, Secret Key, Recovery Key and server shares; every file re-encrypted; shows the new kit |
 | This device | Whether it remembers the Secret Key and skips the second factor (and until when); Forget this device |
 | Trusted devices | Every trusted device (label, trusted since, until), "this device" marked; Revoke one; Revoke all |
 | Auto-lock | Minutes of inactivity before locking (1–60, per device, default 10) |

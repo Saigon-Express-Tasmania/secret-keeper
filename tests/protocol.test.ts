@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { isApiError } from "@/lib/api/client"
 import { encryptFileJson } from "@/lib/crypto/file"
 import { parseKey } from "@/lib/crypto/keys"
-import { openPrimarySlot } from "@/lib/crypto/vaultFile"
+import { openPrimarySlot, openRecoverySlot } from "@/lib/crypto/vaultFile"
 import { loadDevice } from "@/lib/device/deviceStore"
 import { putFile } from "@/lib/vault/fs"
 import {
@@ -247,15 +247,37 @@ describe("re-keying", () => {
   })
 
   it("rotates every key and still opens the files", async () => {
-    const { server, session } = await setup()
+    const { server, session, kit: oldKit, secretKey: oldSecretKey } = await setup()
     await addNote(session, "notes/a.json", "secret")
-    const { kit } = await session.rekey({ proof: { password: PASSWORD }, rotateVaultKey: true })
+    const oldBody = parseCkv3((await server.store.get("vaults/family.enc"))!.body)
+    const oldFile = structuredClone(session.payload.root.entries.notes)
+    const { kit } = await session.rekey({
+      proof: { password: PASSWORD },
+      rotateVaultKey: true,
+      newSecretKey: true,
+      newRecoveryKey: true,
+      revokeDevices: true,
+    })
     expect(kit?.recoveryKey).toMatch(/^RK1-/)
+    expect(kit!.secretKey).not.toBe(oldKit.secretKey)
     expect(await session.decryptFile("notes/a.json")).toEqual({ text: "secret" })
-    const reopened = await unlockWithPassword(createBrowser(server), "family", PASSWORD, {
+    // Files were re-encrypted under the new file key.
+    expect(session.payload.root.entries.notes).not.toEqual(oldFile)
+
+    const laptop = createBrowser(server)
+    await expect(
+      unlockWithPassword(laptop, "family", PASSWORD, { secretKey: oldSecretKey })
+    ).rejects.toSatisfy((e) => e instanceof NeedSecretKeyError && e.reason === "wrong")
+    const reopened = await unlockWithPassword(laptop, "family", PASSWORD, {
       secretKey: parseKey("SK1", kit!.secretKey),
     })
     expect(await reopened.decryptFile("notes/a.json")).toEqual({ text: "secret" })
+
+    // The old Recovery Key opens only the old copy, never the rotated vault.
+    const oldRecovery = parseKey("RK1", oldKit.recoveryKey!)
+    const newHeader = parseCkv3((await server.store.get("vaults/family.enc"))!.body).header
+    await expect(openRecoverySlot(newHeader, oldRecovery)).rejects.toThrow()
+    await expect(openRecoverySlot(oldBody.header, oldRecovery)).resolves.toBeDefined()
   })
 })
 

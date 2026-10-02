@@ -13,7 +13,7 @@ shaped this design are in [security-audit.md](./security-audit.md).
 | Storage leak (R2 bucket, backups) | Every object and its metadata | Every blob needs the Secret Key (or the email share, sealed with a key R2 never sees) besides the password; verifiers are keyed HMACs |
 | Someone who learned the master password | The password | Also needs the Secret Key (or, with email unlock, the mailbox), plus TOTP when enabled |
 | Someone who controls the mailbox | Sign-in links | Still needs the password; with email unlock off also the Secret Key; plus TOTP when enabled |
-| Thief of a trusted device / browser profile | Secret Key + device cookie | Still needs the password; guesses are online only (P is server-held), and the device is revoked after 5 failures |
+| Thief of a trusted device / browser profile | Secret Key + device cookie | Still needs the password (and a passkey touch when required); guesses are online only (P is server-held), and the device is revoked after 5 failures |
 | Passer-by at an unlocked session | The open tab | Idle auto-lock, lock on `pagehide`, clipboard auto-clear, password re-entry for every security change |
 | Whoever controls the Netlify site | The code users run | Out of scope: a web-delivered vault trusts the code it is served |
 
@@ -31,29 +31,6 @@ shaped this design are in [security-audit.md](./security-audit.md).
 | Passkey (WebAuthn PRF) | Cryptographic, on the authenticator | Optional "require passkey": every password or email unlock, on every device |
 | Trusted device (30 days) | Access control (cookie) + local Secret Key | Skips the second factor; expires after a fixed 30 days |
 | Lockout | Access control | Failures 1–5 free, then `min(2^(n-6) min, 4 h)` |
-
-### Passkeys
-
-- **What it adds.** With "require passkey" on, a random passkey key KP joins
-  the primary and email slots: KEK = HKDF(pwKey ‖ Secret Key ‖ P ‖ KP). Each
-  enrolled passkey (at most 10) wraps KP under HKDF of its WebAuthn PRF
-  output for a per-passkey random salt, bound to the vault id and credential
-  id. Trusted devices are not exempt: every unlock needs a touch with
-  user verification (PIN or biometrics). The Recovery Key slot does not use
-  KP, so a lost passkey is never fatal.
-- **No server involvement.** Nothing is registered or verified on the
-  server; the gate is the 32 bytes only the authenticator can produce.
-  Passkeys without the PRF extension are refused at enrollment.
-- **Enrollment** checks the master password on the server first, then
-  creates the passkey (and asks once more for a touch when the authenticator
-  only answers PRF on sign-in), then re-keys. A passkey created but not
-  stored, or later removed, is reported to the password manager as unknown
-  where the browser supports it.
-- **Scope.** Passkeys are bound to the site's domain (the WebAuthn RP ID);
-  moving the site to another domain means using the Recovery Key and adding
-  passkeys again. KP lives in the vault body for re-keys; removing a passkey
-  drops its wrapped copy, and the rotated server share makes older blobs
-  useless.
 
 ### Authenticator app (TOTP)
 
@@ -99,6 +76,29 @@ shaped this design are in [security-audit.md](./security-audit.md).
   device, keys or password changed, authenticator app removed, address
   changed or removed (to the old address).
 
+### Passkeys
+
+- **What it adds.** With "require passkey" on, a random passkey key KP joins
+  the primary and email slots: KEK = HKDF(pwKey ‖ Secret Key ‖ P ‖ KP). Each
+  enrolled passkey (at most 10) wraps KP under HKDF of its WebAuthn PRF
+  output for a per-passkey random salt, bound to the vault id and credential
+  id. Trusted devices are not exempt: every unlock needs a touch with
+  user verification (PIN or biometrics). The Recovery Key slot does not use
+  KP, so a lost passkey is never fatal.
+- **No server involvement.** Nothing is registered or verified on the
+  server; the gate is the 32 bytes only the authenticator can produce.
+  Passkeys without the PRF extension are refused at enrollment.
+- **Enrollment** checks the master password on the server first, then
+  creates the passkey (and asks once more for a touch when the authenticator
+  only answers PRF on sign-in), then re-keys. A passkey created but not
+  stored, or later removed, is reported to the password manager as unknown
+  where the browser supports it.
+- **Scope.** Passkeys are bound to the site's domain (the WebAuthn RP ID);
+  moving the site to another domain means using the Recovery Key and adding
+  passkeys again. KP lives in the vault body for re-keys; removing a passkey
+  drops its wrapped copy, and the rotated server share makes older blobs
+  useless.
+
 ### Trusted devices
 
 - Issued only after a real second factor (TOTP code, email link, Recovery
@@ -127,7 +127,9 @@ See [data-model.md](./data-model.md) for byte layouts.
 - **Key slots.** A random vault key VK is wrapped (AES-256-GCM, AAD bound to
   slot type and vault id) by a KEK derived with one HKDF over the fixed-length
   concatenation of the slot's factors: primary = password key ‖ Secret Key ‖
-  server share P; recovery = Recovery Key.
+  server share P; email (optional) = password key ‖ server share E; recovery =
+  Recovery Key. With "require passkey" the passkey key KP is appended to the
+  primary and email slots.
 - **Body.** AES-256-GCM under `HKDF(VK)`; the whole header is the AAD, so any
   header change makes the body fail to open. Plaintext is padded to 16 KiB.
 - **Files.** Each file is AES-256-GCM under a random file DEK stored in the
@@ -136,7 +138,11 @@ See [data-model.md](./data-model.md) for byte layouts.
 - **Re-keying.** Changing the password, Secret Key or Recovery Key re-wraps
   the slots and always mints a new server share, so every older blob, backup
   or cached copy stops opening (the server no longer releases the old share).
-  "Rotate all keys" also replaces VK and the file DEK.
+  "Rotate all keys" (Tools → Security) also replaces VK, the file DEK, the
+  Secret Key and the Recovery Key, re-encrypts every file and can sign out
+  all trusted devices. Copies made before still open with the old Recovery
+  Key, so use it after a device or an Emergency Kit may have been exposed.
+  The passkey key KP carries over (each passkey wraps it).
 - **Key commitment.** AES-GCM is not key-committing; a malicious server could
   in theory craft a slot that opens under two keys, but it already sees the
   authKey, so it gains nothing it could not get by guessing passwords.

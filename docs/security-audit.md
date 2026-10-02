@@ -225,11 +225,32 @@ keep it out of any server or browser code path.
 
 ## Remediation plan
 
+All phases are done.
+
 | Phase | Fixes | Content |
 |---|---|---|
 | 0 | F13, F14, F18 | Test harness, generator, bounded inflate, `npm ci`, this report |
 | 1 | F5 (partial), F6, F7 | Clipboard auto-clear, idle lock, CSP and headers |
 | 2–3 | — | Server foundation, new vault format (CKV3) |
 | 4 | F1–F5, F8–F12, F16, F17 | Netlify Function proxy with per-vault auth, CKV3 with key slots, Secret Key, Recovery Key, rollback protection, safe export and import |
-| 5–7 | — (new gates) | TOTP, trusted devices, email link, passkeys |
-| 8 | — | Key rotation, final documentation |
+| 5 | — (new gate) | Authenticator-app TOTP enforced by the server; trusted devices (30 days) with their own failure counters; device list and revocation |
+| 6 | — (new gate) | Confirmed email address, one-time sign-in links (`/verify`), optional email unlock, security alerts, mail limits |
+| 7 | — (new gate) | Passkeys through the WebAuthn PRF extension, optionally required at every unlock |
+| 8 | — | "Rotate all keys" (vault key, file key, Secret Key, Recovery Key, server shares), final documentation |
+
+The resulting design, its gates and its residual risks are described in
+[security.md](./security.md).
+
+### Found while building the fixes
+
+- **"Show Secret Key" did not check the password** (introduced in Phase 4,
+  fixed in Phase 5 before any release): the step-up proof was derived but
+  never sent, so anyone at an unlocked tab could display the key. It now
+  goes through the server's `verify` operation, which also counts failures
+  toward the lockout.
+- **TOTP guessing through step-up** (avoided by design in Phase 5): a right
+  password resets the lockout, so checking a TOTP code after a separate
+  password check would let a session holder guess codes without limit. The
+  code is checked in the same compare-and-swap as the password, and a wrong
+  code counts as a failure. For the same reason a sign-in link request with
+  the right password does not reset the counter.

@@ -28,6 +28,7 @@ Unlock (`src/lib/vault/vaultSession.ts`): `POST /api/vault/prelogin` (KDF params
 - `VaultContext` wraps one `VaultSession`; keys stay outside React state and are wiped on lock (manual, idle, pagehide, ended session).
 - Saves: `PUT /api/vault/blob` with `If-Match` and rev+1; conflicts reload and replay the mutator once. Changing slots/KDF/passkeys is a re-key (step-up proof, fresh server shares, new auth epoch).
 - Server state: `vaults/{name}.enc` (blob + auth record in object metadata), `meta/{name}.json` (lockout, TOTP, email, devices; compare-and-swap), `backups/`. See `docs/storage.md`.
+- Gates beyond the password: Secret Key, server share P, Recovery Key, TOTP (`server/twoFactor.ts`), trusted-device cookies (`server/cookies.ts`), email links / email unlock (`server/email.ts`, `/verify`), passkeys via WebAuthn PRF (`src/lib/webauthn/prf.ts`). Security changes go through `/account` ops or a re-key, both with step-up proof (`server/routes/auth.ts`).
 - Boundaries: `src/` never imports `server/`/`netlify/`; Function-bundled code (`server/`, `netlify/`, `src/shared/`) uses relative imports only (`tests/boundaries.test.ts`).
 - Dashboard UI lives in `components/dashboard/`, security UI in `components/security/`; icons come from `lib/icons/catalog.ts` backed by the JSON catalogs.
 

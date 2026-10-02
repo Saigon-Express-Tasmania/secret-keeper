@@ -3,8 +3,13 @@
 Personal vault SPA for passwords, auth keys, wallets, TOTP seeds and secret
 notes. Everything is encrypted in the browser (Argon2id + AES-256-GCM with
 key slots); a single Netlify Function stores the ciphertext on Cloudflare R2
-and enforces access: password proof, Secret Key, second factors, trusted
-devices, lockout and revision order.
+and enforces access: password proof, lockout and revision order.
+
+Gates besides the master password: a Secret Key and a server-held key share
+(no offline guessing), a Recovery Key, an authenticator app (TOTP), emailed
+one-time sign-in links (optionally replacing the Secret Key on a new
+device), passkeys or security keys (WebAuthn PRF), and 30-day trusted
+devices. See [docs/security.md](docs/security.md).
 
 ## Stack
 
@@ -49,8 +54,8 @@ emulation on http://localhost:8888.
    | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from step 1 |
    | `BREVO_API_KEY`, `MAIL_FROM`, `MAIL_FROM_NAME` | from step 2 |
 
-4. Deploy, create your vault, then open **Tools → Security** to add a second
-   factor.
+4. Deploy, create your vault, then open **Tools → Security** to add an
+   authenticator app, an email address and passkeys.
 
 Do **not** add `VITE_*` variables: Vite inlines them into the public bundle,
 and the build refuses to run while one is set. Details and the migration from

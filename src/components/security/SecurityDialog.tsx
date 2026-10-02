@@ -6,6 +6,7 @@ import {
   LifeBuoy,
   Mail,
   MonitorSmartphone,
+  RefreshCw,
   ShieldCheck,
   Smartphone,
   Timer,
@@ -15,6 +16,7 @@ import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterP
 import { EmailDialog } from "@/components/security/EmailDialog"
 import { EmergencyKitView } from "@/components/security/EmergencyKitView"
 import { PasskeyAddDialog } from "@/components/security/PasskeyAddDialog"
+import { RotateKeysDialog } from "@/components/security/RotateKeysDialog"
 import { StepUpDialog } from "@/components/security/StepUpDialog"
 import { TotpDisableDialog } from "@/components/security/TotpDisableDialog"
 import { TotpSetupDialog } from "@/components/security/TotpSetupDialog"
@@ -93,6 +95,7 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
   const [totpDisable, setTotpDisable] = useState(false)
   const [emailDialog, setEmailDialog] = useState(false)
   const [passkeyAdd, setPasskeyAdd] = useState(false)
+  const [rotateKeys, setRotateKeys] = useState(false)
   const [status, setStatus] = useState<AccountStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [autoLock, setAutoLock] = useState(readAutoLockMinutes)
@@ -420,6 +423,17 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                 </div>
               </Section>
 
+              <Section icon={<RefreshCw className="size-4" />} title="Rotate all keys">
+                <p className="text-muted-foreground">
+                  If a device that had this vault open, or your Emergency Kit, may be
+                  compromised: replace every key and re-encrypt every file. You get a new
+                  Emergency Kit.
+                </p>
+                <Button size="sm" variant="outline" disabled={saving} onClick={() => setRotateKeys(true)}>
+                  Rotate all keys
+                </Button>
+              </Section>
+
               <Section icon={<Laptop className="size-4" />} title="This device">
                 <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                   <li>
@@ -578,6 +592,22 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
               ...(input.kind === "code" ? { code: input.code } : {}),
             })
           )
+        }}
+      />
+
+      <RotateKeysDialog
+        open={rotateKeys}
+        onOpenChange={setRotateKeys}
+        onRotate={async (password, revokeDevices) => {
+          const result = await rekey({
+            proof: { password },
+            rotateVaultKey: true,
+            newSecretKey: true,
+            newRecoveryKey: true,
+            revokeDevices,
+          })
+          if (revokeDevices) setDevices(() => [])
+          if (result.kit) setKit(result.kit)
         }}
       />
 

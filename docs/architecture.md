@@ -46,9 +46,12 @@ Lock (manual, idle, pagehide, session end) → keys wiped from memory
 | `src/lib/crypto/{file,pack}.ts` | Per-file AES-GCM, CKZ1 pack (deflate, bounded inflate) |
 | `src/lib/api/client.ts` | Typed `/api/vault` client |
 | `src/lib/device/deviceStore.ts` | Trusted-device record (Secret Key + highest revision seen), 30 days |
+| `src/lib/webauthn/prf.ts` | Passkey enrollment and PRF evaluation (WebAuthn) |
+| `src/lib/vault/signInLink.ts` | Reads `/verify#v=…&t=…` sign-in links |
 | `src/shared/*` | Isomorphic: CKV3 codec, API types, frames, vault names, bytes |
 | `netlify/functions/vault.mts` | Netlify adapter; edge rate limit |
 | `server/*` | Router, routes, verifiers, sealing, sessions, device cookies, lockout, backups, mail |
+| `server/twoFactor.ts`, `server/email.ts` | TOTP checks; sign-in links, confirmation codes, mail limits |
 | `scripts/ck-file.ts` | Builds encrypted import files from KeePass or the old format |
 | `scripts/dev-api.ts` | Local API server (file store) for development |
 
