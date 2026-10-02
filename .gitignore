@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 .local/
+.netlify/
+
+# Encrypted vault import files written by scripts/ck-file.ts
+*.ckx
 
 # KeePass sources / plaintext dumps (never commit)
 *.kdbx

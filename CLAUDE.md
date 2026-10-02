@@ -5,26 +5,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev          # Vite dev server (http://localhost:5173)
-npm run build        # tsc -b && vite build
+npm run dev          # Vite dev server (http://localhost:5173), proxies /api to dev:api
+npm run dev:api      # local vault API on :8787 (file store in .local/dev-store, setup code "dev")
+npm run dev:netlify  # netlify dev: Vite + Function on :8888 (needs R2 env)
+npm run build        # tsc -b && vite build (refuses if any VITE_* var is set)
+npm run check:bundle # scan dist/ for storage hosts / signing code / secret names
 npm run lint         # oxlint
-npm run import-kdbx  # scripts/import-kdbx.ts via vite-node (KeePass import)
+npm test             # vitest (node env); *.test.ts next to sources, tests/ for end-to-end
+npm run ck-file      # scripts/ck-file.ts: encrypted import files (from-kdbx, from-legacy)
 npm run expand-icons # regenerate icon JSON catalogs in src/lib/icons
 ```
 
-There is no test runner configured. `@/` aliases `src/`. Setup requires `.env.local` copied from `.env.example` (Cloudflare R2 credentials + `VITE_VAULT_SALT_KEY`); restart the dev server after env changes. Full R2/CORS setup is in [README.md](README.md).
+`@/` aliases `src/`. Local development needs no cloud account (`dev:api` + `dev`). Server settings come from `.env.local` / Netlify env without the `VITE_` prefix (see `.env.example`); no `VITE_*` variables exist. Setup and migration: [README.md](README.md), [docs/deployment.md](docs/deployment.md).
 
 ## Architecture
 
-Static React 19 + Vite + Tailwind 4 + shadcn/ui SPA (deployed on Netlify) that stores a single client-side-encrypted vault blob on an object store. No backend, no user accounts: vault name + master password is the unlock gate. Two routes: Gate (`/`, `src/screens/Gate.tsx`) and Dashboard (`/dashboard`, `src/screens/Dashboard.tsx`).
+Static React 19 + Vite + Tailwind 4 + shadcn/ui SPA plus one Netlify Function (`netlify/functions/vault.mts` → `server/`). The browser does all encryption; the Function stores ciphertext on R2 and enforces access. Routes: Gate (`/`, `src/screens/Gate.tsx`: unlock / create / recovery steps; also `/verify` for emailed sign-in links) and Dashboard (`/dashboard`).
 
-Unlock flow (orchestrated in `src/lib/vault/persist.ts`): download `{vaultName}.enc` from storage + local ciphertext cache → decrypt (`lib/crypto/vault.ts`, CKV2 = Argon2id + AES-GCM, peppered by `VITE_VAULT_SALT_KEY`) → unpack (`lib/crypto/pack.ts`, CKZ1 = scramble + inflate; legacy CKV1 migrates) → merge (`lib/vault/merge.ts`, currently remote wins) → refresh cache, upload if remote missing, and create a prefixed backup if due (`lib/vault/backup.ts`, uses `VITE_VAULT_BACKUP_*`).
+Unlock (`src/lib/vault/vaultSession.ts`): `POST /api/vault/prelogin` (KDF params) → Argon2id in the browser → authKey to `POST /unlock` (second factor off trusted devices, lockout) → server returns a session, server share P and the CKV3 blob → open the primary slot (pwKey ‖ Secret Key ‖ P [‖ passkey key]) or email/recovery slot → vault key → body (CKZ1 archive) → per-file AES-GCM under the file DEK.
 
+- Format and keys: `src/shared/ckv3.ts` (container codec, also used by the server), `src/lib/crypto/{kdf,keys,vaultFile}.ts`; details in `docs/data-model.md`.
 - The decrypted vault is an in-memory `VaultArchive` (nested folders/files JSON tree; helpers in `lib/vault/fs.ts`, Trash (`recycleBin`) in `recycleBin.ts`, export/import in `transfer.ts`). Account files are decrypted on open by the editor (`components/editor/`, schema in `lib/account/schema.ts`).
-- `context/VaultContext.tsx` holds the archive, master password and object key; cleared on lock.
-- Storage is a dumb blob store behind `StorageStrategy` (`lib/storage/types.ts`, `createStorage.ts`). Only the R2 adapter (SigV4 via `aws4fetch`) is implemented; `s3`, `supabase`, `gdrive` are stubs. `localCache.ts` keeps a ciphertext replica in `localStorage`.
-- Every `VITE_*` var is inlined into the client bundle, so R2 keys are exposed to the browser (known scaffolding tradeoff; see `docs/security.md`). Changing `VITE_VAULT_SALT_KEY` makes existing vaults unopenable.
-- The Dashboard is a macOS Finder clone: `components/dashboard/` (FinderApp, window chrome, `views/` Icons/List/Columns, `menus/`, `hooks/`), driven by a single command registry (`commands.ts`) shared by the menu bar, context menus, toolbar and keyboard. Vault-agnostic Mac building blocks (traffic lights, window, sidebar, path/status bars, alerts) live in `components/mac/`; pure Finder logic (item model, sort, paths, shortcuts, reducer) in `lib/finder/`; shared hooks in `src/hooks/`. All vault changes go through `useFinderMutations` (single-flight `commit`).
+- `VaultContext` wraps one `VaultSession`; keys stay outside React state and are wiped on lock (manual, idle, pagehide, ended session). Writes are single-flight, and a write that finishes after lock is discarded.
+- Saves: `PUT /api/vault/blob` with `If-Match` and rev+1; conflicts reload and replay the mutator once. Changing slots/KDF/passkeys is a re-key (step-up proof, fresh server shares, new auth epoch).
+- Server state: `vaults/{name}.enc` (blob + auth record in object metadata), `meta/{name}.json` (lockout, TOTP, email, devices; compare-and-swap), `backups/`. See `docs/storage.md`.
+- Gates beyond the password: Secret Key, server share P, Recovery Key, TOTP (`server/twoFactor.ts`), trusted-device cookies (`server/cookies.ts`), email links / email unlock (`server/email.ts`, `/verify`), passkeys via WebAuthn PRF (`src/lib/webauthn/prf.ts`). Security changes go through `/account` ops or a re-key, both with step-up proof (`server/routes/auth.ts`).
+- Boundaries: `src/` never imports `server/`/`netlify/`; Function-bundled code (`server/`, `netlify/`, `src/shared/`) uses relative imports only (`tests/boundaries.test.ts`).
+- The Dashboard is a macOS Finder clone: `components/dashboard/` (FinderApp, window chrome, `views/` Icons/List/Columns, `menus/`, `hooks/`), driven by a single command registry (`commands.ts`) shared by the menu bar, context menus, toolbar and keyboard. Vault-agnostic Mac building blocks (traffic lights, window, sidebar, path/status bars, alerts) live in `components/mac/`; pure Finder logic (item model, sort, paths, shortcuts, reducer) in `lib/finder/`; shared hooks in `src/hooks/`. All vault changes go through `useFinderMutations` (single-flight `commit`). Security settings (Keep menu → Security…) live in `components/security/`.
 - Theme: macOS tokens in `index.css` (`--mac-*`, exposed as `bg-mac-*`/`text-mac-*`), light and dark via `prefers-color-scheme` (no `.dark` class). Item icons come from `lib/icons/catalog.ts` backed by the JSON catalogs (generated by `scripts/expand-icons.mjs`); `components/icons/FinderIcon.tsx` draws them on Finder-style folder/document artwork.
 
-Design docs in `docs/` (architecture, data-model, storage, security, screens, deployment) are the source of truth for intended behavior.
+Design docs in `docs/` (architecture, data-model, storage, security, security-audit, screens, deployment) are the source of truth for intended behavior.

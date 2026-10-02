@@ -1,4 +1,3 @@
-import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterPasswordDialog"
 import { FinderContext } from "@/components/dashboard/finderContext"
 import { FinderMenuBar } from "@/components/dashboard/FinderMenuBar"
 import { FinderWindow } from "@/components/dashboard/FinderWindow"
@@ -13,6 +12,7 @@ import { UnsavedChangesDialog } from "@/components/dashboard/UnsavedChangesDialo
 import { AppIcon } from "@/components/mac/AppIcon"
 import { Desktop } from "@/components/mac/Desktop"
 import { DesktopIcon } from "@/components/mac/DesktopIcon"
+import { SecurityDialog } from "@/components/security/SecurityDialog"
 import { pathBasename, type VaultArchive } from "@/lib/vault/fs"
 import { cn } from "@/lib/utils"
 
@@ -66,12 +66,7 @@ export function FinderApp({ archive }: { archive: VaultArchive }) {
         {...c.leave.dialog}
         fileName={pathBasename(c.model.path)}
       />
-      <ChangeMasterPasswordDialog
-        open={c.dialogs.changePasswordOpen}
-        onOpenChange={c.dialogs.setChangePasswordOpen}
-        busy={c.busy}
-        onSubmit={c.changeMasterPassword}
-      />
+      <SecurityDialog open={c.dialogs.securityOpen} onOpenChange={c.dialogs.setSecurityOpen} />
       <ImportVaultDialog
         open={c.dialogs.importOpen}
         onOpenChange={c.dialogs.setImportOpen}

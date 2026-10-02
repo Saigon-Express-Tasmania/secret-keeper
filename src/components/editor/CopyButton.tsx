@@ -2,6 +2,7 @@ import { useCallback, useState } from "react"
 import { Check, Copy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { copySecretText } from "@/lib/security/clipboard"
 import { cn } from "@/lib/utils"
 
 type CopyButtonProps = {
@@ -26,7 +27,7 @@ export function CopyButton({
   const handleCopy = useCallback(async () => {
     if (!value) return
     try {
-      await navigator.clipboard.writeText(value)
+      await copySecretText(value)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {

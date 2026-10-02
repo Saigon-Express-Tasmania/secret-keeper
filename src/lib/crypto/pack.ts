@@ -14,6 +14,8 @@ import {
 
 const MAGIC = new TextEncoder().encode("CKZ1")
 const HEADER_LEN = 8 // magic + uint32 LE length
+/** Upper bound on the inflated archive JSON (zip-bomb guard). */
+export const MAX_UNPACKED_BYTES = 32 * 1024 * 1024
 
 /** Copy into a fresh ArrayBuffer-backed view (DOM BlobPart / BufferSource typing). */
 function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -61,15 +63,42 @@ async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(buf)
 }
 
-async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
+/**
+ * Inflate with a byte budget: stops reading (and throws) as soon as the
+ * output would exceed `maxBytes`, so a crafted pack cannot exhaust memory.
+ */
+async function inflateRaw(
+  data: Uint8Array,
+  maxBytes: number
+): Promise<Uint8Array> {
   if (typeof DecompressionStream === "undefined") {
     throw new Error("DecompressionStream is not available in this environment")
   }
-  const stream = new Blob([asBufferSource(data)])
+  const reader = new Blob([asBufferSource(data)])
     .stream()
     .pipeThrough(new DecompressionStream("deflate-raw"))
-  const buf = await new Response(stream).arrayBuffer()
-  return new Uint8Array(buf)
+    .getReader()
+
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {})
+      throw new Error("Invalid CKZ1 pack: inflated size exceeds declared length")
+    }
+    chunks.push(value)
+  }
+
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    out.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return out
 }
 
 function writeUint32LE(view: Uint8Array, offset: number, value: number): void {
@@ -117,9 +146,12 @@ export async function unpackArchive(bytes: Uint8Array): Promise<RawVaultArchive>
   }
 
   const expectedLen = readUint32LE(bytes, 4)
+  if (expectedLen > MAX_UNPACKED_BYTES) {
+    throw new Error("Invalid CKZ1 pack: declared length too large")
+  }
   const scrambled = bytes.subarray(HEADER_LEN)
   const compressed = unscramble(scrambled)
-  const jsonBytes = await inflateRaw(compressed)
+  const jsonBytes = await inflateRaw(compressed, expectedLen)
 
   if (jsonBytes.length !== expectedLen) {
     throw new Error(

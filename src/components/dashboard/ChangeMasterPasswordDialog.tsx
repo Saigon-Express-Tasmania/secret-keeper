@@ -12,23 +12,28 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { masterPasswordProblem } from "@/lib/security/password"
+import { describeError } from "@/lib/vault/errors"
 
 type ChangeMasterPasswordDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   busy?: boolean
-  onSubmit: (current: string, next: string) => Promise<void>
+  vaultName: string
+  onSubmit: (current: string, next: string, revokeDevices: boolean) => Promise<void>
 }
 
 export function ChangeMasterPasswordDialog({
   open,
   onOpenChange,
   busy = false,
+  vaultName,
   onSubmit,
 }: ChangeMasterPasswordDialogProps) {
   const [current, setCurrent] = useState("")
   const [next, setNext] = useState("")
   const [confirm, setConfirm] = useState("")
+  const [revokeDevices, setRevokeDevices] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [prevOpen, setPrevOpen] = useState(open)
 
@@ -38,6 +43,7 @@ export function ChangeMasterPasswordDialog({
       setCurrent("")
       setNext("")
       setConfirm("")
+      setRevokeDevices(true)
       setError(null)
     }
   }
@@ -46,8 +52,9 @@ export function ChangeMasterPasswordDialog({
     event.preventDefault()
     setError(null)
 
-    if (!next) {
-      setError("New password cannot be empty.")
+    const problem = masterPasswordProblem(next, vaultName)
+    if (problem) {
+      setError(problem)
       return
     }
     if (next === current) {
@@ -60,12 +67,10 @@ export function ChangeMasterPasswordDialog({
     }
 
     try {
-      await onSubmit(current, next)
+      await onSubmit(current, next, revokeDevices)
       onOpenChange(false)
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to change master password."
-      )
+      setError(describeError(err))
     }
   }
 
@@ -76,8 +81,8 @@ export function ChangeMasterPasswordDialog({
           <DialogHeader>
             <DialogTitle>Change master password</DialogTitle>
             <DialogDescription>
-              Re-encrypt the vault under a new master password. The session
-              stays unlocked after a successful change.
+              Re-wraps the vault keys under the new password and rotates the
+              server keys. Other sessions are signed out; this one stays open.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 py-4">
@@ -121,6 +126,16 @@ export function ChangeMasterPasswordDialog({
                 className="mt-1.5"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={revokeDevices}
+                onChange={(e) => setRevokeDevices(e.target.checked)}
+                disabled={busy}
+              />
+              Also sign out all trusted devices
+            </label>
             {error ? (
               <p className="text-sm text-destructive" role="alert">
                 {error}
