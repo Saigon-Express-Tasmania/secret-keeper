@@ -82,10 +82,10 @@ export const COMMANDS = {
           "A client-side encrypted vault. Everything is encrypted in this browser before it is stored.",
       }),
   },
-  "app.changePassword": {
-    label: "Change Master Password…",
+  "app.security": {
+    label: "Security…",
     mutates: true,
-    run: (x) => x.c.dialogs.setChangePasswordOpen(true),
+    run: (x) => x.c.dialogs.setSecurityOpen(true),
   },
   "app.export": {
     label: "Export Vault…",

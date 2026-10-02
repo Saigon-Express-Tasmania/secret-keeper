@@ -1,32 +1,79 @@
 # Screens
 
-The app has exactly two routes.
+The app has three routes.
 
 | Route | Screen | Purpose |
 | --- | --- | --- |
-| `/` | Gate | Unlock with vault name + master password |
+| `/` | Gate | Unlock, create a vault, or recover with the Recovery Key |
+| `/verify` | Gate (sign-in link) | Finish an emailed sign-in link: `/verify#v=<vault>&t=<token>` |
 | `/dashboard` | Dashboard | Browse / create folders and files in the unlocked vault |
 
 Unknown paths redirect to `/`.
 
 ## Gate
 
-**UI:** centered card, vault name field (placeholder hint `vault`), master password field, Unlock button; loading state (“Unlocking…”) and error text. Name + password use browser autofill (`username` / `current-password`).
+A centered card that switches between modes and steps (`src/screens/Gate.tsx`,
+`src/components/gate/*`). Every step shows typed errors (wrong password,
+locked with a wait time, invalid code, network).
 
-**Behavior:**
+**Unlock** — vault name, master password, "Trust this device for 30 days".
 
-1. Create storage strategy from env
-2. Derive object key from vault name (`toVaultObjectKey` — appends `.enc` when missing)
-3. `download(objectKey)` (null if missing)
-4. Load local ciphertext cache
-5. Decrypt available blobs with master password + `VITE_VAULT_SALT_KEY`
-6. `mergeVaults` (currently prefers remote)
-7. Migrate to archive v3 (per-file encryption) if needed; re-upload when migrated
-8. Persist chosen ciphertext locally; upload if remote was missing / create empty vault
-9. Store session payload (names + file ciphertext), file DEK (CryptoKey + bytes in refs), object key, and master password in `VaultContext`
-10. Navigate to Dashboard (show error if download/decrypt fails)
+1. `POST /prelogin` → KDF parameters (unknown names get stable fake ones)
+2. Argon2id in the browser (progress shown) → authKey + pwKey
+3. `POST /unlock` with authKey; on an untrusted device the server may answer
+   **second factor required** → the second-factor step
+4. Open the blob: rollback check against this device's highest seen revision,
+   then the primary slot with the Secret Key remembered on this device —
+   or ask for it (**Secret Key** step); a wrong key is reported as such
+   because the server already verified the password
+5. Trusted device: remember the Secret Key and revision for 30 days
+6. Hand the session to `VaultContext` → Dashboard
 
-If already unlocked, visiting `/` redirects to `/dashboard`.
+**Second factor** — TOTP code from an authenticator app, "Email me a sign-in
+link" (when the vault has a confirmed address and no authenticator app), or
+"Use Recovery Key". Shown only off-device. With an authenticator app the code
+is always required; a link cannot replace it.
+
+**Check your email** — after "Email me a sign-in link": the masked address,
+"works once, for 15 minutes", open it on the device to unlock.
+
+**Finish signing in** (`/verify`) — the page reads the vault name and token
+from the URL fragment, then removes them from the address bar and history.
+It asks for the master password (and the authenticator code when on, as a
+second-factor step) with "Trust this device" ticked by default. With email
+unlock the vault opens without the Secret Key and a trusted device keeps it
+from then on; otherwise the Secret Key step follows. A used or expired link
+shows "This sign-in link is incomplete or was already opened".
+
+The **Secret Key** step also offers "Email me a link instead" when the vault
+has email unlock.
+
+**Use your passkey** — when the vault requires a passkey, after the Secret
+Key is settled: "Use passkey" starts WebAuthn from the click (browsers need
+the gesture). One touch is remembered for the rest of the attempt, so a
+mistyped Secret Key does not ask again. A cancelled prompt or a passkey that
+does not belong to the vault shows an error; "Use Recovery Key" always works.
+
+**Create a vault** — name (`a-z 0-9 -`), master password twice (≥ 12
+characters, not the vault name), the server's setup code, trust checkbox. The
+browser generates the vault key, Secret Key, Recovery Key and server share,
+uploads the encrypted vault, then shows the **Emergency Kit**.
+
+**Use Recovery Key** — vault name + `RK1-…`. Opens the recovery slot (no
+second factor), then forces **Set a new master password** (new Recovery Key
+always, new Secret Key and "sign out all trusted devices" by default) and
+shows the new Emergency Kit.
+
+**Possible rollback** — shown when the server returns an older revision (or a
+different vault) than this trusted device has seen. "Open anyway" only after
+restoring a backup on purpose.
+
+**Emergency Kit** — vault name, Secret Key, Recovery Key, copy buttons,
+"Download Emergency Kit (.txt)"; continuing requires "I saved my Emergency
+Kit somewhere safe".
+
+If already unlocked, visiting `/` redirects to `/dashboard`. Lock reasons
+(inactivity, ended session) are shown on the unlock form.
 
 ## Dashboard
 
@@ -91,11 +138,32 @@ Some Finder shortcuts are reserved by browsers (⇧⌘N, ⌘N, ⌘W, ⌃⌘Q); t
 **Other behavior:**
 
 - Requires an unlocked archive; otherwise redirects to Gate. Opens at the first top-level folder (alphabetically).
-- **Lock** clears payload, master password, object key, DEK refs and any open-file plaintext, then returns to Gate. A save that finishes after locking is discarded and never re-opens the vault.
-- **Change Master Password** verifies the current password, re-encrypts the outer CKV2 blob under the new one (file DEK unchanged) and stays unlocked.
-- **Export / Import** work as before; an import lands in a new “Imported YYYY-MM-DD” folder, which opens.
+- **Lock** (also idle timeout, `pagehide`, ended session) wipes the session keys and any open-file plaintext, clears a copied secret from the clipboard, then returns to Gate. A save that finishes after locking is discarded and never re-opens the vault.
+- **Security…** (Keep menu) replaces the old Change Master Password item; see below.
+- **Export** downloads a `.ckx` file that opens with this vault's Recovery Key. **Import** takes a `.ckx` plus a Recovery Key or one-time import key (empty for this vault's own exports); an import lands in a new “Imported YYYY-MM-DD” folder (or the root), which opens. Old `.ckv` files must be converted with `npm run ck-file -- from-legacy`.
+- Saves upload the next revision with `If-Match`; if another device saved first, the latest version is fetched and the change is replayed once.
+- Copy buttons wipe the clipboard after 30 s (or on the next focus if the tab was in the background).
 - Layout preferences (view, sort, icon size, sidebar width/visibility, path/status bars, zoom) persist in `localStorage` as `ck:finder`. They never include vault names or paths, and paths never appear in the URL or page title.
+
+## Security dialog
+
+Keep menu → **Security…** (⋯ menu on narrow screens). Every change asks for the master password again (step-up).
+
+| Section | Actions |
+| --- | --- |
+| Master password | Change it: re-wraps the slots, rotates the server shares (old copies stop opening), ends other sessions, optionally signs out trusted devices |
+| Two-step verification | **Set up authenticator app**: QR code + key to type, code from the app, master password, "Trust this device" (other devices lose trust). **Turn off**: current code + master password, or the Recovery Key alone |
+| Email | **Add / Change**: address + master password, then the 6-digit code mailed to it (the old address keeps working until then and is told about the change). **Remove** (only with email unlock off). **Email unlock** on/off: re-keys the vault to add or drop the email slot |
+| Passkeys | Shown when the browser supports passkeys. **Add passkey**: name + master password (checked first), then "Create passkey". **Require passkey** / **Stop requiring**. **Remove** (not the last one while required) |
+| Emergency Kit | Show Secret Key (password checked by the server); New Secret Key; New Recovery Key (each shows the new kit once) |
+| Rotate all keys | Master password + "Also sign out all trusted devices": new vault key, file key, Secret Key, Recovery Key and server shares; every file re-encrypted; shows the new kit |
+| This device | Whether it remembers the Secret Key and skips the second factor (and until when); Forget this device |
+| Trusted devices | Every trusted device (label, trusted since, until), "this device" marked; Revoke one; Revoke all |
+| Auto-lock | Minutes of inactivity before locking (1–60, per device, default 10) |
+
+The dialog loads the vault's factors and devices from the server when it
+opens.
 
 ## Routing guard
 
-`VaultContext` holds the session `VaultArchive` (encrypted file bodies only, or `null` when locked). The file DEK is not part of the React payload object.
+`VaultContext` holds the session `VaultArchive` (encrypted file bodies only, or `null` when locked). Key material (vault key, file DEK, Secret Key) lives in a `VaultSession` object outside React state; the master password is never kept after the unlock step that needs it.

@@ -3,22 +3,8 @@ import { WandSparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { generatePassword } from "@/lib/security/password"
 import { cn } from "@/lib/utils"
-
-const LOWER = "abcdefghijklmnopqrstuvwxyz"
-const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const DIGITS = "0123456789"
-const SYMBOLS = "!@#$%^&*()-_=+[]{};:,.<>?"
-
-function generatePassword(length: number, useSymbols: boolean): string {
-  const alphabet = LOWER + UPPER + DIGITS + (useSymbols ? SYMBOLS : "")
-  const bytes = crypto.getRandomValues(new Uint8Array(length))
-  let out = ""
-  for (let i = 0; i < length; i++) {
-    out += alphabet[bytes[i]! % alphabet.length]!
-  }
-  return out
-}
 
 type PasswordGeneratorProps = {
   onGenerate: (password: string) => void

@@ -7,7 +7,8 @@ import { sha1 } from "@noble/hashes/legacy.js"
 import { sha256, sha512 } from "@noble/hashes/sha2.js"
 
 import type { OtpAlgorithm, OtpDigits, OtpSettings } from "@/lib/account/schema"
-import { base32Decode } from "@/lib/otp/base32"
+// Relative runtime import: the vault Function bundles this module too.
+import { base32Decode } from "./base32"
 
 function hashFor(algorithm: OtpAlgorithm) {
   switch (algorithm) {

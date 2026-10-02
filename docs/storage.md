@@ -1,123 +1,103 @@
 # Storage
 
-Storage backends are selected with the strategy pattern. The UI and crypto layers talk only to `StorageStrategy`; each provider adapter owns its SDK and credentials.
+The browser never talks to the storage provider. It calls the vault API
+(`/api/vault/*`, a Netlify Function), and only the Function holds storage
+credentials. Storage is a dumb object store; it only ever sees ciphertext and
+sealed metadata.
 
-## Interface
+```text
+Browser ──HTTPS──► /api/vault/* (netlify/functions/vault.mts → server/) ──S3 API──► R2 bucket
+```
+
+## Object store interface
+
+`server/store.ts`:
 
 ```ts
-interface StorageStrategy {
-  readonly id: "r2" | "s3" | "supabase" | "gdrive"
-  download(objectKey: string): Promise<Uint8Array | null> // null = missing
-  upload(objectKey: string, data: Uint8Array): Promise<void>
-  list(prefix: string): Promise<string[]>
-  remove(objectKey: string): Promise<void> // missing keys are ok
+interface ObjectStore {
+  head(key): Promise<{ etag, size, meta } | null>
+  get(key): Promise<{ etag, size, meta, body } | null>
+  put(key, body, { ifMatch?, ifNoneMatch?: "*", meta? }): Promise<{ etag }> // 412 → PreconditionFailedError
+  copy(sourceKey, destinationKey): Promise<void> // keeps metadata
+  list(prefix): Promise<string[]>
+  delete(key): Promise<void>
 }
 ```
 
-Factory: `createStorage()` in `src/lib/storage/createStorage.ts`, driven by `VITE_STORAGE_PROVIDER`.
+Implementations:
 
-Vault object key: entered on the Gate as a vault name, then normalized by `toVaultObjectKey()` in `src/lib/storage/createStorage.ts` (appends `.enc` when missing). Example: `vault` → `vault.enc`.
-
-Local ciphertext cache: `src/lib/storage/localCache.ts` (browser `localStorage`).
-
-## Providers and env vars
-
-Copy `.env.example` to `.env.local` (or `.env`) and fill only the provider you use.
-
-Required for crypto (all providers):
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_VAULT_SALT_KEY` | Argon2 pepper; long random secret; keep stable |
-
-### Cloudflare R2 (`r2`) — implemented
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_R2_ACCOUNT_ID` | Cloudflare account id |
-| `VITE_R2_ACCESS_KEY_ID` | R2 API token access key |
-| `VITE_R2_SECRET_ACCESS_KEY` | R2 API token secret |
-| `VITE_R2_BUCKET` | Bucket name |
-| `VITE_R2_ENDPOINT` | Optional; only used if it contains `r2.cloudflarestorage.com` |
-
-The adapter talks to the **S3 API** at `https://<account_id>.r2.cloudflarestorage.com` via `aws4fetch` (path-style `/{bucket}/{key}`). A public CDN hostname is **not** used for download/upload.
-
-**CORS:** adding origins in the dashboard is not enough. `aws4fetch` sends `Authorization`, `x-amz-date`, and `x-amz-content-sha256`, which triggers a browser preflight. If those headers are missing from `AllowedHeaders`, R2 returns `403 CORS not configured for this bucket` with no `Access-Control-Allow-Origin` header.
-
-Paste this as the bucket CORS policy (Settings → CORS Policy → JSON). Origins must include the scheme (`http://localhost:5173`, not `localhost:5173`):
-
-```json
-[
-  {
-    "AllowedOrigins": [
-      "http://localhost:5173",
-      "http://localhost:5174"
-    ],
-    "AllowedMethods": ["GET", "PUT", "HEAD", "DELETE"],
-    "AllowedHeaders": [
-      "Authorization",
-      "Content-Type",
-      "x-amz-content-sha256",
-      "x-amz-date"
-    ],
-    "ExposeHeaders": ["ETag", "Content-Length"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
-
-Add production origins (e.g. `https://your-app.netlify.app`) to `AllowedOrigins` when you deploy. CORS changes can take up to 30 seconds.
-
-Download returns `null` on HTTP 404 (object not created yet). List uses `GET` on the bucket with `list-type=2`. Remove uses `DELETE` (404 is treated as success).
-
-### AWS S3 (`s3`)
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_S3_REGION` | AWS region |
-| `VITE_S3_ACCESS_KEY_ID` | IAM access key |
-| `VITE_S3_SECRET_ACCESS_KEY` | IAM secret |
-| `VITE_S3_BUCKET` | Bucket name |
-
-Stub only (`NotImplementedError`).
-
-### Supabase Storage (`supabase`)
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_SUPABASE_URL` | Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Anon (or dedicated) key |
-| `VITE_SUPABASE_BUCKET` | Storage bucket |
-
-Stub only.
-
-### Google Drive (`gdrive`)
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_GDRIVE_CLIENT_ID` | OAuth client id |
-| `VITE_GDRIVE_CLIENT_SECRET` | OAuth client secret |
-| `VITE_GDRIVE_REFRESH_TOKEN` | Long-lived refresh token |
-| `VITE_GDRIVE_FOLDER_ID` | Optional parent folder |
-
-Stub only.
-
-## Login backups
-
-After a successful unlock, backup runs **after the current turn** (unlock and navigation are not blocked). It snapshots the live vault ciphertext, then copies it to a timestamped object on the same bucket when the last backup is older than the interval (or none exist).
-
-A new backup is kept only after a re-download matches the snapshot (byte length + SHA-256). A mismatch deletes that object and retries up to 3 times. If every attempt fails, older backups are left in place. Failures are logged and never block login.
-
-Name: `{prefix}{objectKey}-{yyyyMMddTHHmmssZ}` — e.g. `bak-vault.enc-20260906T080000Z`.
-
-Due/not-due and retention are decided by listing keys under `{prefix}{objectKey}-` and parsing timestamps in those filenames (delete keys older than the retention window).
-
-| Variable | Default | Purpose |
+| Store | File | Used by |
 | --- | --- | --- |
-| `VITE_VAULT_BACKUP_PREFIX` | `bak-` | List/delete prefix; must not match the live object key |
-| `VITE_VAULT_BACKUP_INTERVAL_HOURS` | `8` | Minimum hours between new backups; `0` disables |
-| `VITE_VAULT_BACKUP_RETENTION_DAYS` | `7` | Delete backups whose filename timestamp is older than this |
+| Cloudflare R2 (S3 API, SigV4 via `aws4fetch`) | `server/r2Store.ts` | Production Function, `dev:api -- --r2`, `ck-file from-legacy --vault` |
+| In-memory | `server/memoryStore.ts` | Tests |
+| Local files (`.local/dev-store`) | `scripts/lib/fileStore.ts` | `npm run dev:api` |
 
-## Unlock persistence flow
+All writes that matter are compare-and-swap (`If-Match` / `If-None-Match`),
+which R2 supports on PutObject.
 
-See `src/lib/vault/persist.ts`: download remote → load local → decrypt → `mergeVaults` (remote-wins stub) → write local cache → upload when remote was missing → schedule a best-effort prefixed backup.
+## Bucket layout
+
+Vault names are `a-z 0-9 -` (1–48 chars), so these prefixes never collide:
+
+| Key | Content |
+| --- | --- |
+| `vaults/{name}.enc` | CKV3 vault blob (see [data-model.md](./data-model.md)) + auth record in custom metadata |
+| `meta/{name}.json` | Server-side gate state (lockout, TOTP, email, link tokens, trusted devices) |
+| `backups/{name}/{yyyyMMddTHHmmssZ}.enc` | Earlier versions of the vault blob, with their metadata |
+
+### Auth record (vault object metadata)
+
+Written in the same PUT as the blob, so a password change swaps slots and
+verifier atomically:
+
+| Key | Meaning |
+| --- | --- |
+| `ck` | `3` |
+| `vid`, `rev` | Vault id and revision (match the CKV3 header) |
+| `kdf` | Argon2id parameters + salt, returned by `prelogin` |
+| `sh` | Hash of the header's slots/KDF/passkeys; changing it requires a re-key |
+| `av`, `rv` | `HMAC(k_ver, vaultId ‖ authKey)` and the same for the Recovery Key |
+| `sp`, `se` | Server shares P (primary slot) and E (email slot), AES-GCM-sealed with a key derived from `CK_SERVER_SECRET` |
+| `ae` | Auth epoch; bumped by every re-key (ends all sessions) |
+| `bk`, `pr` | Last backup / last prune (unix seconds) |
+
+### `meta/{name}.json`
+
+Lockout counters, sealed TOTP secret and last used step, sealed email
+address (and pending address + hashed verification code), hashed sign-in
+link tokens, trusted devices (hashed cookie secret, label, expiry, failure
+count) and a mail-send log. Updated only by compare-and-swap with retries.
+
+## Backups
+
+Before overwriting the vault the Function copies the current object to
+`backups/{name}/{timestamp}.enc` when the last backup is older than
+`VAULT_BACKUP_INTERVAL_HOURS` (default 8; `0` disables), and always before a
+re-key. CopyObject keeps the metadata, so a backup carries the verifiers and
+sealed shares that match it. At most once a day, backups older than
+`VAULT_BACKUP_RETENTION_DAYS` (default 7) are deleted, always keeping the
+newest three.
+
+**Restoring a backup** (manual): copy `backups/{name}/{ts}.enc` over
+`vaults/{name}.enc` in the R2 dashboard (the copy keeps its metadata). It
+opens with the password, Secret Key and second factors that were current at
+that time. Trusted devices that saw a newer revision will warn about a
+rollback; confirm it on the Gate.
+
+## Local development
+
+* `npm run dev:api` serves the same handler on `http://localhost:8787` with a
+  file store in `.local/dev-store` (override with `CK_DEV_STORE`); Vite
+  proxies `/api` to it. A missing `CK_SERVER_SECRET` is generated into the
+  store directory; a missing `VAULT_SETUP_CODE` defaults to `dev`.
+* `npm run dev:api -- --r2` uses the R2 bucket from `.env.local` instead.
+* `npm run dev:netlify` runs `netlify dev` (Vite + the Function on port 8888)
+  and needs R2 settings.
+
+## Legacy layout (before CKV3)
+
+Older builds stored `{name}.enc` (CKV2) at the bucket root and
+`bak-{name}.enc-{timestamp}` copies, written directly from the browser. Those
+objects are only read by `npm run ck-file -- from-legacy --vault {name}`
+(credentials from `.env.legacy`). Delete them after migrating; see
+[deployment.md](./deployment.md#migrating-from-the-old-version).

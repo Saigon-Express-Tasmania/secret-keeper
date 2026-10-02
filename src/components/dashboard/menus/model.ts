@@ -25,7 +25,7 @@ export function appMenu(): MenuNode[] {
   return [
     cmd("app.about"),
     sep,
-    cmd("app.changePassword"),
+    cmd("app.security"),
     sep,
     cmd("app.export"),
     cmd("app.import"),

@@ -90,8 +90,8 @@ export type FinderController = {
   dialogs: {
     iconTarget: FinderItem | null
     setIconTarget: (item: FinderItem | null) => void
-    changePasswordOpen: boolean
-    setChangePasswordOpen: (v: boolean) => void
+    securityOpen: boolean
+    setSecurityOpen: (v: boolean) => void
     importOpen: boolean
     setImportOpen: (v: boolean) => void
     shortcutsOpen: boolean
@@ -125,8 +125,8 @@ export type FinderController = {
   showInfo: (item: FinderItem | null) => void
   requestLock: () => Promise<void>
   exportVault: () => Promise<void>
-  importVault: (blob: Uint8Array, password: string) => Promise<void>
-  changeMasterPassword: (current: string, next: string) => Promise<void>
+  /** Merge a `.ckx` file; `recoveryKey` is null for this vault's own exports. */
+  importVault: (blob: Uint8Array, recoveryKey: string | null, intoRoot: boolean) => Promise<void>
 }
 
 function downloadBytes(bytes: Uint8Array, filename: string) {
@@ -183,7 +183,7 @@ export function useFinderController(archive: VaultArchive): FinderController {
   const [menuOpen, setMenuOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [iconTarget, setIconTarget] = useState<FinderItem | null>(null)
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [securityOpen, setSecurityOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -547,11 +547,11 @@ export function useFinderController(archive: VaultArchive): FinderController {
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [unsaved])
 
-  const { exportEncryptedVault, importEncryptedVault } = vault
+  const { exportVault: exportVaultFile, importVault: importVaultFile } = vault
   const exportVault = useCallback(async () => {
     setExporting(true)
     try {
-      downloadBytes(await exportEncryptedVault(), exportFilename())
+      downloadBytes(await exportVaultFile(), exportFilename())
     } catch (err) {
       await alerts.alert({
         title: "The vault couldn’t be exported.",
@@ -560,14 +560,14 @@ export function useFinderController(archive: VaultArchive): FinderController {
     } finally {
       setExporting(false)
     }
-  }, [alerts, exportEncryptedVault])
+  }, [alerts, exportVaultFile])
 
   const importVault = useCallback(
-    async (blob: Uint8Array, password: string) => {
-      const folderPath = await importEncryptedVault(blob, password)
+    async (blob: Uint8Array, recoveryKey: string | null, intoRoot: boolean) => {
+      const folderPath = await importVaultFile(blob, recoveryKey, { intoRoot })
       await navigate({ kind: "path", path: folderPath })
     },
-    [importEncryptedVault, navigate]
+    [importVaultFile, navigate]
   )
 
   return {
@@ -602,8 +602,8 @@ export function useFinderController(archive: VaultArchive): FinderController {
     dialogs: {
       iconTarget,
       setIconTarget,
-      changePasswordOpen,
-      setChangePasswordOpen,
+      securityOpen,
+      setSecurityOpen,
       importOpen,
       setImportOpen,
       shortcutsOpen,
@@ -637,6 +637,5 @@ export function useFinderController(archive: VaultArchive): FinderController {
     requestLock,
     exportVault,
     importVault,
-    changeMasterPassword: vault.changeMasterPassword,
   }
 }

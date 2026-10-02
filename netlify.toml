@@ -1,17 +1,33 @@
 [build]
-  command = "npm run build"
+  # npm ci installs exactly what package-lock.json pins (with integrity hashes).
+  command = "npm ci && npm run build"
   publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# `npm run dev:netlify` runs Vite plus the Function on http://localhost:8888.
+[dev]
+  framework = "#custom"
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8888
+  autoLaunch = false
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Defense in depth: only same-origin scripts; images may come from any https
-# host (external node icons are rendered as plain <img> only).
+# The script/style/connect CSP ships as a <meta> tag from vite.config.ts.
+# frame-ancestors only works as a header, so it is sent here.
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://*.r2.cloudflarestorage.com"
+    Content-Security-Policy = "frame-ancestors 'none'"
+    X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), publickey-credentials-get=(self), publickey-credentials-create=(self)"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Strict-Transport-Security = "max-age=31536000"
