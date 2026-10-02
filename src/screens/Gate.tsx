@@ -11,6 +11,7 @@ import {
   BrokenLinkStep,
   CreateForm,
   EmailSentStep,
+  PasskeyStep,
   RecoverForm,
   RecoveryRekeyStep,
   RollbackStep,
@@ -36,16 +37,20 @@ import { deviceLabel } from "@/lib/device/label"
 import { sessionDeps } from "@/lib/vault/deps"
 import { describeError } from "@/lib/vault/errors"
 import type { SignInLink } from "@/lib/vault/signInLink"
+import { browserPasskeys } from "@/lib/webauthn/prf"
 import {
   createVault,
+  NeedPasskeyError,
   NeedSecretKeyError,
   openDownloadedVault,
   preparePasswordUnlock,
   prepareRecoveryUnlock,
+  rememberPasskey,
   requestEmailLink,
   requestUnlock,
   RollbackError,
   wipePending,
+  WrongPasskeyError,
   type DownloadedVault,
   type EmergencyKit,
   type OpenOptions,
@@ -62,6 +67,7 @@ type Step =
   | { kind: "secondFactor"; methods: SecondFactorMethod[] }
   | { kind: "emailSent"; to: string }
   | { kind: "secretKey"; downloaded: DownloadedVault; reason: "missing" | "wrong" }
+  | { kind: "passkey"; downloaded: DownloadedVault; options: OpenOptions }
   | { kind: "rollback"; downloaded: DownloadedVault; message: string; options: OpenOptions }
   | { kind: "recoveryRekey"; session: VaultSession; recoveryKey: Uint8Array }
   | { kind: "kit"; session: VaultSession; kit: EmergencyKit }
@@ -88,13 +94,21 @@ export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
   const trustRef = useRef(false)
   // Sent with every unlock attempt on /verify; the server uses it up on success.
   const emailTokenRef = useRef<string | null>(signInLink?.token ?? null)
+  // One passkey touch per unlock attempt, reused if the Secret Key is retried.
+  const passkeyRef = useRef<ReturnType<typeof rememberPasskey> | null>(null)
 
-  // Never leave derived keys behind if the Gate unmounts mid-flow.
-  useEffect(() => () => wipePending(pendingRef.current), [])
-
-  function resetTo(next: Mode) {
+  function forgetSecrets() {
     wipePending(pendingRef.current)
     pendingRef.current = null
+    passkeyRef.current?.forget()
+    passkeyRef.current = null
+  }
+
+  // Never leave derived keys behind if the Gate unmounts mid-flow.
+  useEffect(() => () => forgetSecrets(), [])
+
+  function resetTo(next: Mode) {
+    forgetSecrets()
     if (mode === "verify") {
       // Leave /verify; the link stays unused.
       emailTokenRef.current = null
@@ -121,8 +135,7 @@ export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
   }
 
   function finish(session: VaultSession) {
-    wipePending(pendingRef.current)
-    pendingRef.current = null
+    forgetSecrets()
     emailTokenRef.current = null
     attach(session)
     navigate("/dashboard", { replace: true })
@@ -130,7 +143,10 @@ export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
 
   async function open(downloaded: DownloadedVault, options: OpenOptions = {}) {
     try {
-      const { session, mustRekey } = await openDownloadedVault(sessionDeps, downloaded, options)
+      const { session, mustRekey } = await openDownloadedVault(sessionDeps, downloaded, {
+        ...options,
+        ...(passkeyRef.current ? { passkey: passkeyRef.current } : {}),
+      })
       if (mustRekey && downloaded.pending.mode === "recovery") {
         setStep({ kind: "recoveryRekey", session, recoveryKey: downloaded.pending.recoveryKey })
       } else {
@@ -144,6 +160,13 @@ export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
       }
       if (err instanceof RollbackError) {
         setStep({ kind: "rollback", downloaded, message: err.message, options })
+        return
+      }
+      if (err instanceof NeedPasskeyError || err instanceof WrongPasskeyError) {
+        passkeyRef.current?.forget()
+        passkeyRef.current = null
+        setStep({ kind: "passkey", downloaded, options })
+        if (err instanceof WrongPasskeyError) setError(err.message)
         return
       }
       throw err
@@ -206,6 +229,20 @@ export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
     run(async () => {
       if (step.kind !== "secretKey") return
       await open(step.downloaded, { secretKey: parseKey("SK1", text) })
+    })
+
+  // Called straight from the click: browsers need the gesture for WebAuthn.
+  const onPasskey = () =>
+    run(async () => {
+      if (step.kind !== "passkey") return
+      passkeyRef.current = rememberPasskey(browserPasskeys())
+      try {
+        await open(step.downloaded, step.options)
+      } catch (err) {
+        passkeyRef.current?.forget()
+        passkeyRef.current = null
+        throw err
+      }
     })
 
   const onRollbackContinue = () =>
@@ -314,6 +351,17 @@ export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
           onEmailLink={
             mode === "unlock" && step.downloaded.meta.account.emailUnlock ? onEmailLink : undefined
           }
+          onRecover={() => resetTo("recover")}
+          onBack={() => resetTo("unlock")}
+        />
+      )
+      break
+    case "passkey":
+      description = "One more factor for this vault."
+      body = (
+        <PasskeyStep
+          {...busyProps}
+          onUse={onPasskey}
           onRecover={() => resetTo("recover")}
           onBack={() => resetTo("unlock")}
         />

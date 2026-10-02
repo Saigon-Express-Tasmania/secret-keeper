@@ -48,6 +48,12 @@ shows "This sign-in link is incomplete or was already opened".
 The **Secret Key** step also offers "Email me a link instead" when the vault
 has email unlock.
 
+**Use your passkey** — when the vault requires a passkey, after the Secret
+Key is settled: "Use passkey" starts WebAuthn from the click (browsers need
+the gesture). One touch is remembered for the rest of the attempt, so a
+mistyped Secret Key does not ask again. A cancelled prompt or a passkey that
+does not belong to the vault shows an error; "Use Recovery Key" always works.
+
 **Create a vault** — name (`a-z 0-9 -`), master password twice (≥ 12
 characters, not the vault name), the server's setup code, trust checkbox. The
 browser generates the vault key, Secret Key, Recovery Key and server share,
@@ -103,6 +109,7 @@ Tools → Security…. Every change asks for the master password again (step-up)
 | Master password | Change it: re-wraps the slots, rotates the server shares (old copies stop opening), ends other sessions, optionally signs out trusted devices |
 | Two-step verification | **Set up authenticator app**: QR code + key to type, code from the app, master password, "Trust this device" (other devices lose trust). **Turn off**: current code + master password, or the Recovery Key alone |
 | Email | **Add / Change**: address + master password, then the 6-digit code mailed to it (the old address keeps working until then and is told about the change). **Remove** (only with email unlock off). **Email unlock** on/off: re-keys the vault to add or drop the email slot |
+| Passkeys | Shown when the browser supports passkeys. **Add passkey**: name + master password (checked first), then "Create passkey". **Require passkey** / **Stop requiring**. **Remove** (not the last one while required) |
 | Emergency Kit | Show Secret Key (password checked by the server); New Secret Key; New Recovery Key (each shows the new kit once) |
 | This device | Whether it remembers the Secret Key and skips the second factor (and until when); Forget this device |
 | Trusted devices | Every trusted device (label, trusted since, until), "this device" marked; Revoke one; Revoke all |

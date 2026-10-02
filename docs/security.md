@@ -28,10 +28,32 @@ shaped this design are in [security-audit.md](./security-audit.md).
 | Authenticator app (TOTP) | Access control, server-enforced | Every unlock on a device that is not trusted, once enabled |
 | Email sign-in link | Access control (one-time token) | Second factor on untrusted devices when an address is confirmed and TOTP is off |
 | Email unlock (server share E) | Cryptographic, held by the server | Optional: link + password replace the Secret Key on a new device |
+| Passkey (WebAuthn PRF) | Cryptographic, on the authenticator | Optional "require passkey": every password or email unlock, on every device |
 | Trusted device (30 days) | Access control (cookie) + local Secret Key | Skips the second factor; expires after a fixed 30 days |
 | Lockout | Access control | Failures 1–5 free, then `min(2^(n-6) min, 4 h)` |
 
-The passkey gate is described below once enabled.
+### Passkeys
+
+- **What it adds.** With "require passkey" on, a random passkey key KP joins
+  the primary and email slots: KEK = HKDF(pwKey ‖ Secret Key ‖ P ‖ KP). Each
+  enrolled passkey (at most 10) wraps KP under HKDF of its WebAuthn PRF
+  output for a per-passkey random salt, bound to the vault id and credential
+  id. Trusted devices are not exempt: every unlock needs a touch with
+  user verification (PIN or biometrics). The Recovery Key slot does not use
+  KP, so a lost passkey is never fatal.
+- **No server involvement.** Nothing is registered or verified on the
+  server; the gate is the 32 bytes only the authenticator can produce.
+  Passkeys without the PRF extension are refused at enrollment.
+- **Enrollment** checks the master password on the server first, then
+  creates the passkey (and asks once more for a touch when the authenticator
+  only answers PRF on sign-in), then re-keys. A passkey created but not
+  stored, or later removed, is reported to the password manager as unknown
+  where the browser supports it.
+- **Scope.** Passkeys are bound to the site's domain (the WebAuthn RP ID);
+  moving the site to another domain means using the Recovery Key and adding
+  passkeys again. KP lives in the vault body for re-keys; removing a passkey
+  drops its wrapped copy, and the rotated server share makes older blobs
+  useless.
 
 ### Authenticator app (TOTP)
 

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react"
-import { AlertTriangle, KeyRound, Mail, ShieldCheck } from "lucide-react"
+import { AlertTriangle, Fingerprint, KeyRound, Mail, ShieldCheck } from "lucide-react"
 
 import {
   BusyLabel,
@@ -459,6 +459,41 @@ export function SecretKeyStep({
         </LinkButton>
       </div>
     </form>
+  )
+}
+
+// --- Passkey ----------------------------------------------------------------------
+
+export function PasskeyStep({
+  busy,
+  error,
+  onUse,
+  onRecover,
+  onBack,
+}: Busy & { onUse: () => void; onRecover: () => void; onBack: () => void }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Fingerprint className="size-4 text-emerald-700" />
+        Use your passkey
+      </div>
+      <p className="text-sm text-muted-foreground">
+        This vault also needs one of its passkeys or security keys. Your browser will ask for a
+        touch, PIN or biometrics.
+      </p>
+      <FormError message={error} />
+      <Button type="button" autoFocus disabled={busy} onClick={onUse}>
+        {busy ? <BusyLabel label="Waiting for the passkey…" /> : "Use passkey"}
+      </Button>
+      <div className="flex flex-wrap justify-between gap-2">
+        <LinkButton onClick={onBack} disabled={busy}>
+          Back
+        </LinkButton>
+        <LinkButton onClick={onRecover} disabled={busy}>
+          Use Recovery Key
+        </LinkButton>
+      </div>
+    </div>
   )
 }
 

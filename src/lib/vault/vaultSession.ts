@@ -106,6 +106,13 @@ export class NeedPasskeyError extends Error {
   }
 }
 
+export class WrongPasskeyError extends Error {
+  constructor() {
+    super("That passkey doesn't unlock this vault. Try another one, or use the Recovery Key.")
+    this.name = "WrongPasskeyError"
+  }
+}
+
 export class RollbackError extends Error {
   readonly check: Exclude<RollbackCheck, { kind: "ok" }>
   constructor(check: Exclude<RollbackCheck, { kind: "ok" }>) {
@@ -229,13 +236,34 @@ async function passkeyKeyFor(
     header.passkeys.map((p) => ({ id: p.id, salt: p.salt }))
   )
   const entry = header.passkeys.find((p) => p.id === id)
-  if (!entry) throw new NeedPasskeyError()
   try {
+    if (!entry) throw new WrongPasskeyError()
     return await unwrapPasskeyKey(header.vaultId, entry, output)
-  } catch {
-    throw new NeedSecretKeyError("wrong")
+  } catch (error) {
+    if (error instanceof SlotOpenError || error instanceof WrongPasskeyError) {
+      throw new WrongPasskeyError()
+    }
+    throw error
   } finally {
     wipe(output)
+  }
+}
+
+/**
+ * Remember one passkey answer for the rest of an unlock attempt, so a retry
+ * (e.g. after a mistyped Secret Key) does not ask for another touch.
+ */
+export function rememberPasskey(provider: PasskeyProvider): PasskeyProvider & { forget(): void } {
+  let answer: { id: string; output: Uint8Array } | null = null
+  return {
+    async evaluate(credentials) {
+      answer ??= await provider.evaluate(credentials)
+      return { id: answer.id, output: answer.output.slice() }
+    },
+    forget() {
+      if (answer) wipe(answer.output)
+      answer = null
+    },
   }
 }
 
@@ -263,6 +291,16 @@ export async function openDownloadedVault(
   if (pending.mode === "recovery") {
     vaultKey = await openRecoverySlot(header, pending.recoveryKey)
   } else {
+    // Settle the Secret Key before asking for a passkey touch.
+    let secretKey: Uint8Array | null = null
+    if (!meta.emailShare) {
+      secretKey = options.secretKey ?? null
+      if (!secretKey) {
+        secretKey = deviceSecretKey(device)
+        usedDeviceKey = secretKey !== null
+      }
+      if (!secretKey) throw new NeedSecretKeyError("missing")
+    }
     const kp = header.requirePasskey ? await passkeyKeyFor(header, options.passkey) : undefined
     try {
       if (meta.emailShare) {
@@ -273,24 +311,18 @@ export async function openDownloadedVault(
           kp
         )
       } else {
-        let secretKey = options.secretKey ?? null
-        if (!secretKey) {
-          secretKey = deviceSecretKey(device)
-          usedDeviceKey = secretKey !== null
-        }
-        if (!secretKey) throw new NeedSecretKeyError("missing")
         try {
           vaultKey = await openPrimarySlot(
             header,
             pending.keys.pwKey,
-            secretKey,
+            secretKey!, // settled above whenever there is no email share
             fromBase64Url(meta.srvShare, 32),
             kp
           )
         } catch (error) {
           if (!(error instanceof SlotOpenError)) throw error
-          // The server already verified the password, so this is the Secret
-          // Key (or passkey). A stale device copy is dropped.
+          // The server already verified the password and the passkey key
+          // unwrapped, so this is the Secret Key. A stale device copy is dropped.
           if (usedDeviceKey) forgetDevice(pending.vault)
           throw new NeedSecretKeyError(usedDeviceKey ? "missing" : "wrong")
         }

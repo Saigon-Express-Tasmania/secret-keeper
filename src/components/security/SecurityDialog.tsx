@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import {
+  Fingerprint,
   KeyRound,
   Laptop,
   LifeBuoy,
@@ -13,6 +14,7 @@ import {
 import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterPasswordDialog"
 import { EmailDialog } from "@/components/security/EmailDialog"
 import { EmergencyKitView } from "@/components/security/EmergencyKitView"
+import { PasskeyAddDialog } from "@/components/security/PasskeyAddDialog"
 import { StepUpDialog } from "@/components/security/StepUpDialog"
 import { TotpDisableDialog } from "@/components/security/TotpDisableDialog"
 import { TotpSetupDialog } from "@/components/security/TotpSetupDialog"
@@ -35,6 +37,7 @@ import {
 } from "@/lib/prefs/autoLock"
 import { describeError } from "@/lib/vault/errors"
 import { recoveryProof, type EmergencyKit } from "@/lib/vault/vaultSession"
+import { discardPasskey, passkeysSupported } from "@/lib/webauthn/prf"
 import type { AccountStatus, DeviceInfo } from "@/shared/api"
 import { wipe } from "@/shared/bytes"
 
@@ -89,6 +92,7 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
   const [totpSetup, setTotpSetup] = useState(false)
   const [totpDisable, setTotpDisable] = useState(false)
   const [emailDialog, setEmailDialog] = useState(false)
+  const [passkeyAdd, setPasskeyAdd] = useState(false)
   const [status, setStatus] = useState<AccountStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [autoLock, setAutoLock] = useState(readAutoLockMinutes)
@@ -161,6 +165,31 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
       confirmLabel: on ? "Turn on" : "Turn off",
       run: async (password) => {
         await rekey({ proof: { password }, emailUnlock: on })
+      },
+    })
+  }
+
+  function setRequirePasskey(on: boolean) {
+    setStepUp({
+      title: on ? "Require a passkey" : "Stop requiring a passkey",
+      description: on
+        ? "Every unlock will also need a touch of one of this vault's passkeys. The Recovery Key still works without one. Your other open sessions are signed out."
+        : "Unlocking will no longer need a passkey. Your other open sessions are signed out.",
+      confirmLabel: on ? "Require" : "Stop requiring",
+      run: async (password) => {
+        await rekey({ proof: { password }, requirePasskey: on })
+      },
+    })
+  }
+
+  function removePasskey(passkey: { id: string; label: string }) {
+    setStepUp({
+      title: `Remove “${passkey.label}”`,
+      description: "This passkey will no longer unlock the vault.",
+      confirmLabel: "Remove",
+      run: async (password) => {
+        await rekey({ proof: { password }, removePasskeys: [passkey.id] })
+        discardPasskey(passkey.id)
       },
     })
   }
@@ -302,6 +331,76 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                   </div>
                 ) : null}
               </Section>
+
+              {passkeysSupported() || vault.passkeys.length > 0 ? (
+                <Section icon={<Fingerprint className="size-4" />} title="Passkeys">
+                  <p className="text-muted-foreground">
+                    {vault.requirePasskey ? (
+                      <>
+                        <span className="font-medium text-emerald-700">Required.</span> Every
+                        unlock also needs a touch of one of these passkeys. The Recovery Key
+                        still works without one.
+                      </>
+                    ) : vault.passkeys.length > 0 ? (
+                      "Added, not required yet. Require one to need a touch at every unlock."
+                    ) : (
+                      "Need a touch of a passkey or security key (with PIN or biometrics) at every unlock, on top of your password and Secret Key."
+                    )}
+                  </p>
+                  {vault.passkeys.length > 0 ? (
+                    <ul className="divide-y rounded-md border">
+                      {vault.passkeys.map((passkey) => {
+                        const last = vault.requirePasskey && vault.passkeys.length === 1
+                        return (
+                          <li key={passkey.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{passkey.label}</p>
+                              {passkey.added ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Added {new Date(passkey.added).toLocaleDateString()}
+                                </p>
+                              ) : null}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={saving || last}
+                              title={last ? "Stop requiring a passkey first, or add another one" : undefined}
+                              onClick={() => removePasskey(passkey)}
+                            >
+                              Remove
+                            </Button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={saving || !passkeysSupported() || vault.passkeys.length >= 10}
+                      onClick={() => setPasskeyAdd(true)}
+                    >
+                      Add passkey
+                    </Button>
+                    {vault.passkeys.length > 0 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => setRequirePasskey(!vault.requirePasskey)}
+                      >
+                        {vault.requirePasskey ? "Stop requiring" : "Require passkey"}
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Passkeys only work on this site's address. Keep two, or your Recovery Key, in
+                    case one is lost.
+                  </p>
+                </Section>
+              ) : null}
 
               <Section icon={<LifeBuoy className="size-4" />} title="Emergency Kit">
                 <p className="text-muted-foreground">
@@ -479,6 +578,17 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
               ...(input.kind === "code" ? { code: input.code } : {}),
             })
           )
+        }}
+      />
+
+      <PasskeyAddDialog
+        open={passkeyAdd}
+        onOpenChange={setPasskeyAdd}
+        vaultName={vault.name}
+        existing={vault.passkeys.map((passkey) => passkey.id)}
+        onVerify={verifyPassword}
+        onAdd={async (enrollment, password) => {
+          await rekey({ proof: { password }, addPasskey: enrollment })
         }}
       />
 

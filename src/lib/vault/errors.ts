@@ -39,5 +39,19 @@ export function describeError(error: unknown): string {
         return error.message
     }
   }
-  return error instanceof Error ? error.message : "Something went wrong."
+  if (error instanceof Error) {
+    // WebAuthn reports through DOMException names.
+    switch (error.name) {
+      case "NotAllowedError":
+        return "The passkey request was cancelled or timed out."
+      case "InvalidStateError":
+        return "That passkey is already added to this vault."
+      case "SecurityError":
+        return "Passkeys only work on this site's own secure address."
+      case "NotSupportedError":
+        return "This browser or authenticator can't make a suitable passkey."
+    }
+    return error.message
+  }
+  return "Something went wrong."
 }
