@@ -652,22 +652,28 @@ export type SearchHit = {
 /**
  * Search by file/folder name and ancestor path segments only.
  * Does not decrypt file contents.
+ * With `under`, only items below that folder are searched, and the folder's
+ * own ancestors (including itself) don't count as folder matches.
  */
 export function searchArchive(
   archive: VaultArchive,
-  query: string
+  query: string,
+  options?: { under?: string }
 ): SearchHit[] {
   const q = query.trim().toLowerCase()
   if (!q) return []
 
   const hits: SearchHit[] = []
+  const base = splitPath(options?.under ?? "")
 
   function visit(dir: FsDir, pathParts: string[]): void {
     for (const [name, child] of Object.entries(dir.entries)) {
       const childPath = [...pathParts, name]
       const path = childPath.join("/")
       const nameMatch = name.toLowerCase().includes(q)
-      const folderMatch = pathParts.some((p) => p.toLowerCase().includes(q))
+      const folderMatch = pathParts
+        .slice(base.length)
+        .some((p) => p.toLowerCase().includes(q))
 
       if (nameMatch || folderMatch) {
         hits.push({
@@ -684,7 +690,14 @@ export function searchArchive(
     }
   }
 
-  visit(archive.root, [])
+  let start: FsNode | null = archive.root
+  try {
+    start = getNode(archive, base.join("/"))
+  } catch {
+    start = null
+  }
+  if (!start || start.type !== "dir") return []
+  visit(start, base)
   hits.sort((a, b) => a.path.localeCompare(b.path))
   return hits
 }

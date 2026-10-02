@@ -22,6 +22,8 @@ import {
 type VaultContextValue = {
   unlocked: boolean
   payload: VaultArchive | null
+  /** Display name of the unlocked vault (object key without `.enc`). */
+  vaultName: string | null
   /** In-memory only; cleared on lock. */
   masterPassword: string | null
   saving: boolean
@@ -33,6 +35,8 @@ type VaultContextValue = {
   /**
    * Clone payload, run mutator, encrypt+upload. On failure keeps previous payload.
    * Mutator may be async (e.g. encrypt new file body).
+   * Only one save runs at a time: a second call while one is in flight throws.
+   * A save that finishes after `lock()` is discarded (vault stays locked).
    */
   commit: (
     mutator: (archive: VaultArchive) => void | Promise<void>
@@ -67,6 +71,7 @@ const VaultContext = createContext<VaultContextValue | null>(null)
 
 export function VaultProvider({ children }: { children: ReactNode }) {
   const [payload, setPayload] = useState<VaultArchive | null>(null)
+  const [vaultName, setVaultName] = useState<string | null>(null)
   const [masterPassword, setMasterPassword] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -74,23 +79,38 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const fileDekKeyRef = useRef<CryptoKey | null>(null)
   const fileDekBytesRef = useRef<Uint8Array | null>(null)
   const objectKeyRef = useRef<string | null>(null)
+  /** Latest committed payload, so back-to-back commits never start from a stale closure. */
+  const payloadRef = useRef<VaultArchive | null>(null)
+  /** Bumped by unlock/lock; saves from an older session must not touch state. */
+  const sessionRef = useRef(0)
+  /** Synchronous single-flight guard for saves (React `saving` updates too late). */
+  const inFlightRef = useRef(false)
 
-  const unlock = useCallback(async (password: string, vaultName: string) => {
-    const objectKey = toVaultObjectKey(vaultName)
+  const unlock = useCallback(async (password: string, name: string) => {
+    const objectKey = toVaultObjectKey(name)
     const result = await unlockVault(password, objectKey)
+    sessionRef.current += 1
+    inFlightRef.current = false
     fileDekKeyRef.current = result.fileDekKey
     fileDekBytesRef.current = result.fileDekBytes
     objectKeyRef.current = objectKey
+    payloadRef.current = result.payload
     setPayload(result.payload)
+    setVaultName(objectKey.replace(/\.enc$/i, ""))
     setMasterPassword(password)
     setSaveError(null)
+    setSaving(false)
   }, [])
 
   const lock = useCallback(() => {
+    sessionRef.current += 1
+    inFlightRef.current = false
     fileDekKeyRef.current = null
     fileDekBytesRef.current = null
     objectKeyRef.current = null
+    payloadRef.current = null
     setPayload(null)
+    setVaultName(null)
     setMasterPassword(null)
     setSaveError(null)
     setSaving(false)
@@ -114,19 +134,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback(
     async (mutator: (archive: VaultArchive) => void | Promise<void>) => {
+      const current = payloadRef.current
       if (
-        !payload ||
+        !current ||
         !masterPassword ||
         !fileDekBytesRef.current ||
         !objectKeyRef.current
       ) {
         throw new Error("Vault is locked.")
       }
+      if (inFlightRef.current) {
+        throw new Error("Another save is in progress. Try again in a moment.")
+      }
+      inFlightRef.current = true
+      const session = sessionRef.current
       setSaving(true)
       setSaveError(null)
-      const previous = payload
       try {
-        const next = structuredClone(payload)
+        const next = structuredClone(current)
         await mutator(next)
         await saveVault(
           next,
@@ -134,18 +159,23 @@ export function VaultProvider({ children }: { children: ReactNode }) {
           masterPassword,
           objectKeyRef.current
         )
+        if (session !== sessionRef.current) return
+        payloadRef.current = next
         setPayload(next)
       } catch (err) {
-        setPayload(previous)
+        if (session !== sessionRef.current) throw err
         const message =
           err instanceof Error ? err.message : "Failed to save vault."
         setSaveError(message)
         throw err
       } finally {
-        setSaving(false)
+        if (session === sessionRef.current) {
+          inFlightRef.current = false
+          setSaving(false)
+        }
       }
     },
-    [payload, masterPassword]
+    [masterPassword]
   )
 
   const putEncryptedFile = useCallback(
@@ -166,8 +196,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const changeMasterPassword = useCallback(
     async (current: string, next: string) => {
+      const archive = payloadRef.current
       if (
-        !payload ||
+        !archive ||
         !masterPassword ||
         !fileDekBytesRef.current ||
         !objectKeyRef.current
@@ -183,26 +214,36 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       if (next === masterPassword) {
         throw new Error("New password must be different from the current one.")
       }
+      if (inFlightRef.current) {
+        throw new Error("Another save is in progress. Try again in a moment.")
+      }
+      inFlightRef.current = true
+      const session = sessionRef.current
       setSaving(true)
       setSaveError(null)
       try {
         await saveVault(
-          payload,
+          archive,
           fileDekBytesRef.current,
           next,
           objectKeyRef.current
         )
+        if (session !== sessionRef.current) return
         setMasterPassword(next)
       } catch (err) {
+        if (session !== sessionRef.current) throw err
         const message =
           err instanceof Error ? err.message : "Failed to change master password."
         setSaveError(message)
         throw err
       } finally {
-        setSaving(false)
+        if (session === sessionRef.current) {
+          inFlightRef.current = false
+          setSaving(false)
+        }
       }
     },
-    [payload, masterPassword]
+    [masterPassword]
   )
 
   const exportEncryptedVault = useCallback(async (): Promise<EncryptedVaultBlob> => {
@@ -241,6 +282,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     () => ({
       unlocked: payload !== null,
       payload,
+      vaultName,
       masterPassword,
       saving,
       saveError,
@@ -255,6 +297,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }),
     [
       payload,
+      vaultName,
       masterPassword,
       saving,
       saveError,

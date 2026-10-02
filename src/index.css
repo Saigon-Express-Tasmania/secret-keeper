@@ -1,55 +1,216 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * macOS-flavoured theme. Appearance follows the system (Tailwind's default
+ * `dark:` variant is `prefers-color-scheme: dark`), so there is no `.dark`
+ * class to toggle and no flash of the wrong theme on load.
+ */
 
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.992 0.01 145);
-  --foreground: oklch(0.22 0.04 155);
-  --card: oklch(0.995 0.008 145);
-  --card-foreground: oklch(0.22 0.04 155);
-  --popover: oklch(0.995 0.008 145);
-  --popover-foreground: oklch(0.22 0.04 155);
-  --primary: oklch(0.52 0.15 155);
-  --primary-foreground: oklch(0.99 0.01 155);
-  --secondary: oklch(0.94 0.04 175);
-  --secondary-foreground: oklch(0.28 0.07 175);
-  --muted: oklch(0.96 0.025 150);
-  --muted-foreground: oklch(0.45 0.04 155);
-  --accent: oklch(0.93 0.05 155);
-  --accent-foreground: oklch(0.26 0.08 155);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.88 0.035 150);
-  --input: oklch(0.88 0.035 150);
-  --ring: oklch(0.62 0.14 155);
+  color-scheme: light dark;
+  --radius: 0.5rem;
+
+  /* macOS system colours (light) */
+  --mac-accent: #007aff;
+  --mac-label: rgb(0 0 0 / 0.85);
+  --mac-label-2: rgb(0 0 0 / 0.5);
+  --mac-label-3: rgb(0 0 0 / 0.26);
+  --mac-separator: rgb(0 0 0 / 0.1);
+  --mac-content: #ffffff;
+  --mac-row-alt: #f4f5f5;
+  --mac-toolbar: #f6f6f6;
+  --mac-sidebar: rgb(234 234 234 / 0.78);
+  --mac-selection: #0063e1;
+  --mac-selection-inactive: #dcdcdc;
+  --mac-hover: rgb(0 0 0 / 0.05);
+  --mac-sidebar-selection: rgb(0 0 0 / 0.1);
+  --mac-menubar: rgb(246 246 246 / 0.62);
+  --mac-menu: rgb(246 246 246 / 0.86);
+  --mac-menu-border: rgb(0 0 0 / 0.12);
+  --mac-control: #ffffff;
+  --mac-control-border: rgb(0 0 0 / 0.14);
+  --mac-field: #ffffff;
+  --mac-field-border: rgb(0 0 0 / 0.16);
+  --mac-focus: rgb(0 122 255 / 0.5);
+  --mac-page: #f5f5f7;
+  --mac-group: #ffffff;
+  --mac-desktop-dim: rgb(0 0 0 / 0);
+  --mac-window-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.2), 0 22px 70px 4px rgb(0 0 0 / 0.32);
+  --mac-popover-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.12), 0 10px 32px rgb(0 0 0 / 0.22);
+
+  --mac-tl-close: #ff5f57;
+  --mac-tl-close-edge: #e0443e;
+  --mac-tl-min: #febc2e;
+  --mac-tl-min-edge: #dea123;
+  --mac-tl-zoom: #28c840;
+  --mac-tl-zoom-edge: #1aab29;
+  --mac-tl-inactive: #dddddc;
+  --mac-tl-inactive-edge: #c8c8c7;
+
+  --mac-folder-back: #4a9ee8;
+  --mac-folder-front: #79c1f8;
+  --mac-folder-front-2: #57a9ee;
+  --mac-folder-hi: #a9dbff;
+  --mac-doc-page: #ffffff;
+  --mac-doc-fold: #e3e3e3;
+  --mac-doc-edge: rgb(0 0 0 / 0.2);
+  --mac-doc-label: #8e8e93;
+
+  --mac-red: #ff3b30;
+  --mac-orange: #ff9500;
+  --mac-yellow: #ffcc00;
+  --mac-green: #34c759;
+  --mac-teal: #30b0c7;
+  --mac-blue: #007aff;
+  --mac-indigo: #5856d6;
+  --mac-purple: #af52de;
+  --mac-pink: #ff2d55;
+  --mac-gray: #8e8e93;
+
+  /* shadcn tokens mapped onto the macOS palette */
+  --background: #ffffff;
+  --foreground: #262626;
+  --card: #ffffff;
+  --card-foreground: #262626;
+  --popover: #f7f7f7;
+  --popover-foreground: #262626;
+  --primary: var(--mac-accent);
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #262626;
+  --muted: #f2f2f2;
+  --muted-foreground: #7a7a7a;
+  --accent: #ececec;
+  --accent-foreground: #262626;
+  --destructive: var(--mac-red);
+  --border: rgb(0 0 0 / 0.1);
+  --input: rgb(0 0 0 / 0.16);
+  --ring: var(--mac-accent);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mac-accent: #0a84ff;
+    --mac-label: rgb(255 255 255 / 0.85);
+    --mac-label-2: rgb(255 255 255 / 0.55);
+    --mac-label-3: rgb(255 255 255 / 0.25);
+    --mac-separator: rgb(255 255 255 / 0.1);
+    --mac-content: #1e1e1e;
+    --mac-row-alt: rgb(255 255 255 / 0.04);
+    --mac-toolbar: #2c2c2c;
+    --mac-sidebar: rgb(40 40 42 / 0.78);
+    --mac-selection: #0058d0;
+    --mac-selection-inactive: #464646;
+    --mac-hover: rgb(255 255 255 / 0.06);
+    --mac-sidebar-selection: rgb(255 255 255 / 0.1);
+    --mac-menubar: rgb(28 28 30 / 0.5);
+    --mac-menu: rgb(40 40 42 / 0.86);
+    --mac-menu-border: rgb(255 255 255 / 0.12);
+    --mac-control: rgb(255 255 255 / 0.16);
+    --mac-control-border: rgb(255 255 255 / 0.06);
+    --mac-field: rgb(255 255 255 / 0.05);
+    --mac-field-border: rgb(255 255 255 / 0.14);
+    --mac-focus: rgb(10 132 255 / 0.55);
+    --mac-page: #1e1e1e;
+    --mac-group: #2a2a2b;
+    --mac-desktop-dim: rgb(0 0 0 / 0.38);
+    --mac-window-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.12),
+      0 22px 70px 4px rgb(0 0 0 / 0.55);
+    --mac-popover-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.1),
+      0 10px 32px rgb(0 0 0 / 0.45);
+
+    --mac-tl-inactive: rgb(255 255 255 / 0.18);
+    --mac-tl-inactive-edge: rgb(255 255 255 / 0.08);
+
+    --mac-folder-back: #3a86d0;
+    --mac-folder-front: #62aeeb;
+    --mac-folder-front-2: #4797dc;
+    --mac-folder-hi: #8fcaf7;
+    --mac-doc-page: #f0f0f0;
+    --mac-doc-fold: #c8c8c8;
+    --mac-doc-edge: rgb(0 0 0 / 0.35);
+    --mac-doc-label: #8e8e93;
+
+    --mac-red: #ff453a;
+    --mac-orange: #ff9f0a;
+    --mac-yellow: #ffd60a;
+    --mac-green: #30d158;
+    --mac-teal: #40c8e0;
+    --mac-blue: #0a84ff;
+    --mac-indigo: #5e5ce6;
+    --mac-purple: #bf5af2;
+    --mac-pink: #ff375f;
+    --mac-gray: #98989d;
+
+    --background: #1e1e1e;
+    --foreground: #dfdfdf;
+    --card: #2a2a2b;
+    --card-foreground: #dfdfdf;
+    --popover: #2c2c2e;
+    --popover-foreground: #dfdfdf;
+    --secondary: #3a3a3c;
+    --secondary-foreground: #dfdfdf;
+    --muted: #2c2c2e;
+    --muted-foreground: #9a9a9e;
+    --accent: #3a3a3c;
+    --accent-foreground: #e5e5e5;
+    --border: rgb(255 255 255 / 0.1);
+    --input: rgb(255 255 255 / 0.15);
+  }
+}
+
+/* Solid fallbacks when translucency is unavailable or unwanted. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --mac-sidebar: #e8e8e8;
+    --mac-menubar: #f0f0f0;
+    --mac-menu: #f6f6f6;
+  }
+}
+@media (prefers-reduced-transparency: reduce) and (prefers-color-scheme: dark) {
+  :root {
+    --mac-sidebar: #2a2a2b;
+    --mac-menubar: #1f1f20;
+    --mac-menu: #2c2c2e;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --mac-sidebar: #e8e8e8;
+    --mac-menubar: #f0f0f0;
+    --mac-menu: #f6f6f6;
+  }
 }
 
 @theme inline {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Helvetica Neue",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --text-mac-caption: 11px;
+  --text-mac-caption--line-height: 14px;
+  --text-mac-small: 12px;
+  --text-mac-small--line-height: 16px;
+  --text-mac-body: 13px;
+  --text-mac-body--line-height: 18px;
+  --text-mac-title: 15px;
+  --text-mac-title--line-height: 20px;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-window: 10px;
+
+  --shadow-mac-window: var(--mac-window-shadow);
+  --shadow-mac-popover: var(--mac-popover-shadow);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -68,13 +229,58 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-mac-accent: var(--mac-accent);
+  --color-mac-label: var(--mac-label);
+  --color-mac-label-2: var(--mac-label-2);
+  --color-mac-label-3: var(--mac-label-3);
+  --color-mac-separator: var(--mac-separator);
+  --color-mac-content: var(--mac-content);
+  --color-mac-row-alt: var(--mac-row-alt);
+  --color-mac-toolbar: var(--mac-toolbar);
+  --color-mac-sidebar: var(--mac-sidebar);
+  --color-mac-selection: var(--mac-selection);
+  --color-mac-selection-inactive: var(--mac-selection-inactive);
+  --color-mac-hover: var(--mac-hover);
+  --color-mac-sidebar-selection: var(--mac-sidebar-selection);
+  --color-mac-menubar: var(--mac-menubar);
+  --color-mac-menu: var(--mac-menu);
+  --color-mac-menu-border: var(--mac-menu-border);
+  --color-mac-control: var(--mac-control);
+  --color-mac-control-border: var(--mac-control-border);
+  --color-mac-field: var(--mac-field);
+  --color-mac-field-border: var(--mac-field-border);
+  --color-mac-focus: var(--mac-focus);
+  --color-mac-page: var(--mac-page);
+  --color-mac-group: var(--mac-group);
+  --color-mac-red: var(--mac-red);
+  --color-mac-orange: var(--mac-orange);
+  --color-mac-yellow: var(--mac-yellow);
+  --color-mac-green: var(--mac-green);
+  --color-mac-teal: var(--mac-teal);
+  --color-mac-blue: var(--mac-blue);
+  --color-mac-indigo: var(--mac-indigo);
+  --color-mac-purple: var(--mac-purple);
+  --color-mac-pink: var(--mac-pink);
+  --color-mac-gray: var(--mac-gray);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 0.28) transparent;
+  }
+  @media (prefers-color-scheme: dark) {
+    * {
+      scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+    }
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
   }
   body {
-    @apply bg-background text-foreground min-h-svh antialiased;
+    @apply bg-background text-foreground min-h-svh font-sans antialiased;
+    overscroll-behavior: none;
   }
 }

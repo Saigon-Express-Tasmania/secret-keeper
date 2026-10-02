@@ -28,6 +28,8 @@ type IconPickerDialogProps = {
   value?: string
   kind?: "folder" | "file"
   onSelect: (iconId: string) => void
+  /** Offer "Use Default Icon" (clears a custom icon). */
+  onReset?: () => void
   title?: string
 }
 
@@ -37,6 +39,7 @@ export function IconPickerDialog({
   value,
   kind,
   onSelect,
+  onReset,
   title = "Choose icon",
 }: IconPickerDialogProps) {
   const [pending, setPending] = useState<string | undefined>(value)
@@ -89,8 +92,8 @@ export function IconPickerDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Pick a colorful icon for this {kind ?? "item"}. Icons stay offline
-            in the vault ({icons.length} available).
+            Pick an icon for this {kind ?? "item"}. Icons are bundled with the
+            app and never fetched ({icons.length} available).
           </DialogDescription>
         </DialogHeader>
 
@@ -114,7 +117,7 @@ export function IconPickerDialog({
           ) : (
             grouped.map(({ group, items }) => (
               <div key={group}>
-                <div className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <div className="mb-2 text-[11px] font-semibold text-mac-label-2">
                   {ICON_GROUP_LABELS[group]}
                   <span className="ml-1 font-normal normal-case">
                     ({items.length})
@@ -131,9 +134,10 @@ export function IconPickerDialog({
                         onClick={() => setPending(icon.id)}
                         className={cn(
                           "flex aspect-square items-center justify-center rounded-md border p-1.5 transition-colors",
+                          icon.id.startsWith("icon-park:") && "dark:bg-white/85",
                           selected
-                            ? "border-primary bg-accent ring-2 ring-primary/40"
-                            : "border-transparent hover:bg-accent/60"
+                            ? "border-mac-accent bg-mac-accent/15 ring-[3px] ring-mac-focus"
+                            : "border-transparent hover:bg-mac-hover"
                         )}
                         aria-label={icon.label}
                         aria-pressed={selected}
@@ -149,6 +153,19 @@ export function IconPickerDialog({
         </div>
 
         <DialogFooter>
+          {onReset ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="sm:mr-auto"
+              onClick={() => {
+                onReset()
+                onOpenChange(false)
+              }}
+            >
+              Use Default Icon
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"

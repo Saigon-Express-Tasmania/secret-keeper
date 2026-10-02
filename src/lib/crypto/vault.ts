@@ -18,7 +18,7 @@
  * Legacy CKV1 blobs (raw flat VaultPayload JSON) are still decrypted and migrated.
  */
 
-import { argon2id } from "@noble/hashes/argon2.js"
+import { argon2idAsync } from "@noble/hashes/argon2.js"
 
 import { packArchive, unpackArchive } from "@/lib/crypto/pack"
 import {
@@ -88,7 +88,9 @@ export async function deriveKey(
   masterPassword: string,
   salt: Uint8Array
 ): Promise<CryptoKey> {
-  const raw = argon2id(masterPassword, salt, {
+  // Same KDF and output as the synchronous argon2id, but it yields to the
+  // event loop every few ms so the UI keeps painting during unlock/save.
+  const raw = await argon2idAsync(masterPassword, salt, {
     ...ARGON2_OPTS,
     key: getPepper(),
   })
