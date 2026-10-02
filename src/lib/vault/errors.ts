@@ -23,7 +23,8 @@ export function describeError(error: unknown): string {
       case "session_expired":
         return "Your session ended. Unlock the vault again."
       case "conflict":
-        return "The vault was changed elsewhere. Try again."
+        // Save conflicts carry the server's current version; others explain themselves.
+        return error.etag ? "The vault was changed elsewhere. Try again." : error.message
       case "bad_setup_code":
         return "The setup code is not correct."
       case "setup_disabled":

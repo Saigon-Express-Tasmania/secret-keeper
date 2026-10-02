@@ -24,11 +24,46 @@ shaped this design are in [security-audit.md](./security-audit.md).
 | Secret Key `SK1-…` | Cryptographic, 128-bit | Daily unlock (remembered on trusted devices) |
 | Server share P | Cryptographic, held by the server | Every password unlock — makes offline guessing impossible |
 | Recovery Key `RK1-…` | Cryptographic, 256-bit | Break-glass alternative to all of the above |
+| Authenticator app (TOTP) | Access control, server-enforced | Every unlock on a device that is not trusted, once enabled |
 | Trusted device (30 days) | Access control (cookie) + local Secret Key | Skips the second factor; expires after a fixed 30 days |
 | Lockout | Access control | Failures 1–5 free, then `min(2^(n-6) min, 4 h)` |
 
-Additional gates (authenticator-app TOTP, email sign-in link, passkey) are
-described below as they are enabled.
+Additional gates (email sign-in link, passkey) are described below as they
+are enabled.
+
+### Authenticator app (TOTP)
+
+- **Enrollment.** The browser generates a 160-bit secret, shows it once as a
+  QR code (`otpauth://`, SHA-1, 6 digits, 30 s) and sends it with a working
+  code and the master password. The server seals it in `meta/{name}.json`;
+  it never appears in the vault blob or in any response.
+- **Checking.** The current 30 s step ±1 is accepted, and a step is never
+  accepted twice (the last used step is stored), so an observed code cannot
+  be replayed. Wrong codes count toward the lockout like wrong passwords,
+  also when turning TOTP off from a signed-in session.
+- **Turning it on ends all other trust.** Every other trusted device must
+  pass the code at its next unlock; this browser stays trusted only if asked.
+  An active secret cannot be replaced: turn it off first.
+- **Turning it off** needs the master password and a current code, or the
+  Recovery Key alone (lost phone). Without either, the Recovery Key unlock is
+  the way back in; it does not ask for a code.
+
+### Trusted devices
+
+- Issued only after a real second factor (TOTP code, email link, Recovery
+  Key) when "Trust this device" is ticked: an HttpOnly, `SameSite=Strict`,
+  `__Host-` cookie holding a random id and a 256-bit secret. The server keeps
+  the SHA-256 of the secret, a label and the fixed expiry (30 days, never
+  extended); at most 10 per vault.
+- A trusted device only skips the second factor. The password is still
+  checked, with the device's own failure counter: 5 wrong passwords revoke
+  it, and they do not lock the vault for its owner.
+- **Revoking** a device (Tools → Security) makes it pass the second factor
+  again. It does not end a session already open there, and it may still
+  remember the Secret Key: issue a new Secret Key, or change the password
+  with "sign out all trusted devices", to cut it off completely.
+- "This device" in the UI is whichever device the browser's cookie proves;
+  session tokens carry no device binding.
 
 ## Cryptography
 
@@ -59,6 +94,10 @@ See [data-model.md](./data-model.md) for byte layouts.
 
 - **Verifiers.** `HMAC(k_ver, kind ‖ vaultId ‖ authKey)` in the vault object's
   metadata; constant-time comparison.
+- **Step-up.** Every security change re-sends a proof derived from a freshly
+  typed master password (or the Recovery Key); the server checks it against
+  the verifier and counts failures toward the lockout. Showing the Secret Key
+  checks the password on the server too.
 - **Enumeration.** `prelogin` returns stable fake parameters for unknown names
   and `unlock` answers them like a wrong password, without writing anything.
   (Response timing may still differ slightly.)
@@ -94,6 +133,11 @@ See [data-model.md](./data-model.md) for byte layouts.
 - **Hosting compromise.** Whoever can change the deployed site can serve code
   that captures passwords. Use a strong Netlify account (2FA) and review deploys.
 - **Recovery Key.** It alone opens any copy of the vault. Keep it offline.
+- **Open session + password.** Someone who has both (an unlocked tab, or a
+  trusted device and the password) can change the keys and lock the owner
+  out. TOTP does not guard re-keys; keep the auto-lock short and revoke
+  devices you no longer control. Server-side backups (taken before every
+  re-key) still open with the previous Recovery Key.
 - **Clipboard history.** OS clipboard history or sync may keep copies.
 - **Timing.** Response latency may hint whether a vault name exists.
 - **Old copies.** Blobs from before the migration were readable by anyone with

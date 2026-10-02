@@ -84,9 +84,14 @@ Tools → Security…. Every change asks for the master password again (step-up)
 | Section | Actions |
 | --- | --- |
 | Master password | Change it: re-wraps the slots, rotates the server shares (old copies stop opening), ends other sessions, optionally signs out trusted devices |
-| Emergency Kit | Show Secret Key; New Secret Key; New Recovery Key (each shows the new kit once) |
+| Two-step verification | **Set up authenticator app**: QR code + key to type, code from the app, master password, "Trust this device" (other devices lose trust). **Turn off**: current code + master password, or the Recovery Key alone |
+| Emergency Kit | Show Secret Key (password checked by the server); New Secret Key; New Recovery Key (each shows the new kit once) |
 | This device | Whether it remembers the Secret Key and skips the second factor (and until when); Forget this device |
+| Trusted devices | Every trusted device (label, trusted since, until), "this device" marked; Revoke one; Revoke all |
 | Auto-lock | Minutes of inactivity before locking (1–60, per device, default 10) |
+
+The dialog loads the vault's factors and devices from the server when it
+opens.
 
 ## Routing guard
 

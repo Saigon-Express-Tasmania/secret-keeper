@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react"
-import { KeyRound, Laptop, LifeBuoy, ShieldCheck, Timer } from "lucide-react"
+import { useEffect, useState, type ReactNode } from "react"
+import { KeyRound, Laptop, LifeBuoy, MonitorSmartphone, ShieldCheck, Smartphone, Timer } from "lucide-react"
 
 import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterPasswordDialog"
 import { EmergencyKitView } from "@/components/security/EmergencyKitView"
 import { StepUpDialog } from "@/components/security/StepUpDialog"
+import { TotpDisableDialog } from "@/components/security/TotpDisableDialog"
+import { TotpSetupDialog } from "@/components/security/TotpSetupDialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,13 +15,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useVault } from "@/context/VaultContext"
+import { parseKey } from "@/lib/crypto/keys"
 import { loadDevice } from "@/lib/device/deviceStore"
+import { deviceLabel } from "@/lib/device/label"
 import {
   AUTO_LOCK_CHOICES,
   readAutoLockMinutes,
   writeAutoLockMinutes,
 } from "@/lib/prefs/autoLock"
-import type { EmergencyKit } from "@/lib/vault/vaultSession"
+import { describeError } from "@/lib/vault/errors"
+import { recoveryProof, type EmergencyKit } from "@/lib/vault/vaultSession"
+import type { DeviceInfo } from "@/shared/api"
+import { wipe } from "@/shared/bytes"
 
 type SecurityDialogProps = {
   open: boolean
@@ -53,20 +60,53 @@ export function Section({
   )
 }
 
+const day = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleDateString()
+
 export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
-  const { vault, rekey, secretKeyText, forgetThisDevice, passwordProof, saving } = useVault()
+  const {
+    vault,
+    rekey,
+    secretKeyText,
+    forgetThisDevice,
+    passwordProof,
+    verifyPassword,
+    accountRequest,
+    saving,
+  } = useVault()
   const [stepUp, setStepUp] = useState<StepUp | null>(null)
   const [kit, setKit] = useState<EmergencyKit | null>(null)
   const [changePassword, setChangePassword] = useState(false)
+  const [totpSetup, setTotpSetup] = useState(false)
+  const [totpDisable, setTotpDisable] = useState(false)
+  const [devices, setDevices] = useState<DeviceInfo[] | null>(null)
+  const [devicesError, setDevicesError] = useState<string | null>(null)
   const [autoLock, setAutoLock] = useState(readAutoLockMinutes)
+
+  // The server is the source of truth for factors and trusted devices.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    accountRequest({ op: "status" }).then(
+      (status) => {
+        if (cancelled) return
+        setDevices(status.devices)
+        setDevicesError(null)
+      },
+      (error: unknown) => {
+        if (!cancelled) setDevicesError(describeError(error))
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [open, accountRequest])
 
   if (!vault) return null
 
-  const serverTrustedUntil = vault.device.exp
-    ? new Date(vault.device.exp * 1000).toLocaleDateString()
-    : null
+  const serverTrustedUntil = vault.device.exp ? day(vault.device.exp) : null
   const localRecord = loadDevice(vault.name)
   const rememberedUntil = localRecord ? new Date(localRecord.exp).toLocaleDateString() : null
+  const otherDevices = devices?.filter((device) => !device.current) ?? []
 
   function showSecretKey() {
     setStepUp({
@@ -74,7 +114,7 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
       description: "Confirm your master password to display the Secret Key.",
       confirmLabel: "Show",
       run: async (password) => {
-        await passwordProof(password)
+        await verifyPassword(password)
         setKit({ vault: vault!.name, secretKey: secretKeyText() })
       },
     })
@@ -94,6 +134,25 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
           ...(which === "secret" ? { newSecretKey: true } : { newRecoveryKey: true }),
         })
         if (result.kit) setKit(result.kit)
+      },
+    })
+  }
+
+  function revoke(device: DeviceInfo | "all") {
+    setStepUp({
+      title: device === "all" ? "Revoke all trusted devices" : `Revoke “${device.label}”`,
+      description:
+        device === "all"
+          ? "Every device, including this one, will need a second factor at its next unlock."
+          : "That device will need a second factor at its next unlock.",
+      confirmLabel: "Revoke",
+      run: async (password) => {
+        const status = await accountRequest({
+          op: "devices.revoke",
+          proof: await passwordProof(password),
+          id: device === "all" ? "all" : device.id,
+        })
+        setDevices(status.devices)
       },
     })
   }
@@ -124,6 +183,30 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                 <Button size="sm" variant="outline" disabled={saving} onClick={() => setChangePassword(true)}>
                   Change master password
                 </Button>
+              </Section>
+
+              <Section icon={<Smartphone className="size-4" />} title="Two-step verification">
+                {vault.account.totp ? (
+                  <>
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-emerald-700">On.</span> Devices you
+                      haven't trusted need a code from your authenticator app at every unlock.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={() => setTotpDisable(true)}>
+                      Turn off
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">
+                      Off. With an authenticator app, someone who learns your password and
+                      Secret Key still can't unlock the vault on a new device.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={() => setTotpSetup(true)}>
+                      Set up authenticator app
+                    </Button>
+                  </>
+                )}
               </Section>
 
               <Section icon={<LifeBuoy className="size-4" />} title="Emergency Kit">
@@ -161,10 +244,58 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                   size="sm"
                   variant="outline"
                   disabled={!rememberedUntil && !serverTrustedUntil}
-                  onClick={() => void forgetThisDevice()}
+                  onClick={() =>
+                    void forgetThisDevice().then(() =>
+                      setDevices((list) => list?.filter((device) => !device.current) ?? null)
+                    )
+                  }
                 >
                   Forget this device
                 </Button>
+              </Section>
+
+              <Section icon={<MonitorSmartphone className="size-4" />} title="Trusted devices">
+                <p className="text-muted-foreground">
+                  Trusted devices skip the second factor for 30 days. A revoked device may
+                  still remember your Secret Key until you issue a new one.
+                </p>
+                {devicesError ? (
+                  <p className="text-destructive">{devicesError}</p>
+                ) : devices === null ? (
+                  <p className="text-muted-foreground">Loading…</p>
+                ) : devices.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    None. Tick “Trust this device” when you unlock with a second factor.
+                  </p>
+                ) : (
+                  <ul className="divide-y rounded-md border">
+                    {devices.map((device) => (
+                      <li key={device.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {device.label}
+                            {device.current ? (
+                              <span className="ml-2 text-xs font-normal text-emerald-700">this device</span>
+                            ) : null}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Trusted {day(device.created)} · until {day(device.exp)}
+                          </p>
+                        </div>
+                        {device.current ? null : (
+                          <Button size="sm" variant="outline" onClick={() => revoke(device)}>
+                            Revoke
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {devices && devices.length > 0 ? (
+                  <Button size="sm" variant="outline" onClick={() => revoke("all")}>
+                    {otherDevices.length === devices.length ? "Revoke all" : "Revoke all, including this one"}
+                  </Button>
+                ) : null}
               </Section>
 
               <Section icon={<Timer className="size-4" />} title="Auto-lock">
@@ -213,6 +344,45 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
         vaultName={vault.name}
         onSubmit={async (current, next, revokeDevices) => {
           await rekey({ proof: { password: current }, newPassword: next, revokeDevices })
+          if (revokeDevices) setDevices([])
+        }}
+      />
+
+      <TotpSetupDialog
+        open={totpSetup}
+        onOpenChange={setTotpSetup}
+        vaultName={vault.name}
+        onEnable={async ({ secret, code, password, trust }) => {
+          const status = await accountRequest({
+            op: "totp.enable",
+            proof: await passwordProof(password),
+            secret,
+            code,
+            trustDevice: trust,
+            deviceLabel: deviceLabel(),
+          })
+          setDevices(status.devices)
+        }}
+      />
+
+      <TotpDisableDialog
+        open={totpDisable}
+        onOpenChange={setTotpDisable}
+        onDisable={async (input) => {
+          let proof
+          if (input.kind === "code") {
+            proof = await passwordProof(input.password)
+          } else {
+            const recoveryKey = parseKey("RK1", input.recoveryKey)
+            proof = recoveryProof(recoveryKey)
+            wipe(recoveryKey)
+          }
+          const status = await accountRequest({
+            op: "totp.disable",
+            proof,
+            ...(input.kind === "code" ? { code: input.code } : {}),
+          })
+          setDevices(status.devices)
         }}
       />
     </>

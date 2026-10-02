@@ -69,14 +69,16 @@ type VaultContextValue = {
     recoveryKeyText: string | null,
     options?: { intoRoot?: boolean }
   ) => Promise<string>
-  accountRequest: <T = AccountStatus>(request: AccountRequest) => Promise<T>
-  /** Step-up: authKey proof from a freshly typed master password. */
+  /** /account operation (other than "verify"); the returned status is applied. */
+  accountRequest: (request: Exclude<AccountRequest, { op: "verify" }>) => Promise<AccountStatus>
+  /** Step-up: authKey proof from a freshly typed password; the server checks it with the operation. */
   passwordProof: (password: string) => Promise<{ authKey: string }>
+  /** Have the server check the master password now. */
+  verifyPassword: (password: string) => Promise<void>
   /** Emergency Kit Secret Key (shown after step-up). */
   secretKeyText: () => string
   /** Stop trusting this browser for the current vault (local + server). */
   forgetThisDevice: () => Promise<void>
-  refreshAccount: (account: Partial<AccountSummary>) => void
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null)
@@ -238,12 +240,25 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   )
 
   const accountRequest = useCallback(
-    <T,>(request: AccountRequest) => guarded((session) => session.accountRequest<T>(request)),
-    [guarded]
+    (request: Exclude<AccountRequest, { op: "verify" }>) =>
+      guarded(async (session) => {
+        const status = await session.accountRequest<AccountStatus>(request)
+        session.applyAccountStatus(status, {
+          rememberSecretKey: request.op === "totp.enable" && request.trustDevice === true,
+        })
+        sync(session)
+        return status
+      }),
+    [guarded, sync]
   )
 
   const passwordProof = useCallback(
     (password: string) => guarded((session) => session.passwordProof(password)),
+    [guarded]
+  )
+
+  const verifyPassword = useCallback(
+    (password: string) => guarded((session) => session.verifyPassword(password)),
     [guarded]
   )
 
@@ -256,16 +271,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     session.setDevice({ trusted: false })
     sync(session)
   }, [requireSession, sync])
-
-  const refreshAccount = useCallback(
-    (account: Partial<AccountSummary>) => {
-      const session = sessionRef.current
-      if (!session) return
-      session.setAccount(account)
-      sync(session)
-    },
-    [sync]
-  )
 
   const value = useMemo(
     () => ({
@@ -285,9 +290,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       importVault,
       accountRequest,
       passwordProof,
+      verifyPassword,
       secretKeyText,
       forgetThisDevice,
-      refreshAccount,
     }),
     [
       unlocked,
@@ -306,9 +311,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       importVault,
       accountRequest,
       passwordProof,
+      verifyPassword,
       secretKeyText,
       forgetThisDevice,
-      refreshAccount,
     ]
   )
 

@@ -20,8 +20,6 @@ export type SessionClaims = {
   ae: number
   /** Expiry, unix seconds. */
   exp: number
-  /** Trusted-device id when the unlock came from one. */
-  did?: string
 }
 
 export function issueSession(keys: ServerKeys, claims: SessionClaims): string {
@@ -59,8 +57,7 @@ export function verifySession(
     typeof c.n !== "string" ||
     typeof c.vid !== "string" ||
     !Number.isSafeInteger(c.ae) ||
-    !Number.isSafeInteger(c.exp) ||
-    (c.did !== undefined && typeof c.did !== "string")
+    !Number.isSafeInteger(c.exp)
   ) {
     return null
   }
@@ -70,7 +67,6 @@ export function verifySession(
     vid: c.vid,
     ae: c.ae as number,
     exp: c.exp as number,
-    ...(c.did ? { did: c.did as string } : {}),
   }
 }
 

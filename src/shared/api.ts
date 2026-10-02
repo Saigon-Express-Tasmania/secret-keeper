@@ -160,11 +160,21 @@ export type AccountStatus = AccountSummary & {
 
 export type AccountRequest =
   | { op: "status" }
-  | { op: "totp.enable"; proof: StepUpProof; secret: string; code: string; deviceLabel?: string }
+  /** Check the master password; answers { ok: true }. */
+  | { op: "verify"; proof: StepUpProof }
+  | {
+      op: "totp.enable"
+      proof: StepUpProof
+      secret: string
+      code: string
+      trustDevice?: boolean
+      deviceLabel?: string
+    }
   | { op: "totp.disable"; proof: StepUpProof; code?: string }
   | { op: "email.set"; proof: StepUpProof; email: string }
   | { op: "email.confirm"; code: string }
   | { op: "email.remove"; proof: StepUpProof }
+  /** `id` is a device id from AccountStatus.devices, or "all". */
   | { op: "devices.revoke"; proof: StepUpProof; id: string }
 
 // --- email link -------------------------------------------------------------

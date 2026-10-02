@@ -160,7 +160,6 @@ export const putBlob: Route = async (ctx) => {
       vid: record.vid,
       ae: next.ae,
       exp: sessionExp,
-      ...(claims.did ? { did: claims.did } : {}),
     })
   }
   const body: PutBlobResponse = { etag, rev: next.rev, session, sessionExp }

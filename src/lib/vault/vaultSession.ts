@@ -491,6 +491,10 @@ export class VaultSession {
     return this.deps.kdf ?? derivePasswordKeys
   }
 
+  private now(): number {
+    return (this.deps.now ?? Date.now)()
+  }
+
   async decryptFile(path: string): Promise<JsonValue> {
     this.ensureOpen()
     const node = getNode(this.state.payload, path)
@@ -801,7 +805,10 @@ export class VaultSession {
     return this.deps.api.account<T>(this.state.session, request)
   }
 
-  /** Step-up proof for /account operations from a freshly typed password. */
+  /**
+   * Step-up proof for /account operations from a freshly typed password.
+   * Not checked here: the server verifies it with the operation.
+   */
   async passwordProof(password: string): Promise<{ authKey: string }> {
     const keys = await this.passwordKeys(password)
     const proof = { authKey: toBase64Url(keys.authKey) }
@@ -809,12 +816,33 @@ export class VaultSession {
     return proof
   }
 
-  setAccount(account: Partial<AccountSummary>): void {
-    this.state.account = { ...this.state.account, ...account }
+  /** Have the server check the master password (counts toward the lockout). */
+  async verifyPassword(password: string): Promise<void> {
+    const proof = await this.passwordProof(password)
+    await this.accountRequest<{ ok: true }>({ op: "verify", proof })
   }
 
   setDevice(device: { trusted: boolean; exp?: number }): void {
     this.state.device = device
+  }
+
+  /**
+   * Adopt the server's view after an /account call. With `rememberSecretKey`
+   * (the user just asked to trust this browser) a trusted browser also keeps
+   * the Secret Key, as an unlock with "Trust this device" would.
+   */
+  applyAccountStatus(status: AccountStatus, options: { rememberSecretKey?: boolean } = {}): void {
+    this.state.account = { totp: status.totp, email: status.email, emailUnlock: status.emailUnlock }
+    const here = status.devices.find((device) => device.current)
+    this.state.device = here ? { trusted: true, exp: here.exp } : { trusted: false }
+    if (here && options.rememberSecretKey && !loadDevice(this.name, this.now())) {
+      saveDevice(this.name, {
+        secretKey: fromBase64Url(this.state.keys.sk, 16),
+        vid: this.state.header.vaultId,
+        rev: this.state.header.rev,
+        exp: here.exp * 1000,
+      })
+    }
   }
 
   /** Drop key material (best effort; JS cannot guarantee erasure). */
@@ -823,6 +851,11 @@ export class VaultSession {
     this.wiped = true
     wipe(this.state.vaultKey, this.state.fileDekBytes)
   }
+}
+
+/** Step-up proof from the Recovery Key (e.g. turning off TOTP after losing the phone). */
+export function recoveryProof(recoveryKey: Uint8Array): { rkAuth: string } {
+  return { rkAuth: toBase64Url(recoveryAuthKey(recoveryKey)) }
 }
 
 export function isSessionExpired(error: unknown): boolean {

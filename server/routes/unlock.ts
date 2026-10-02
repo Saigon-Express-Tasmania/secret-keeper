@@ -36,7 +36,7 @@ import {
   HttpError,
   readJson,
 } from "../http"
-import { lockSecondsAfter, MAX_DEVICE_FAILURES } from "../lockout"
+import { MAX_DEVICE_FAILURES, recordFailure } from "../lockout"
 import { notifyRecoveryUsed, notifyNewDevice } from "../notify"
 import { updateMeta, type DeviceRecord, type VaultMeta } from "../meta"
 import { checkVerifier, unseal } from "../secrets"
@@ -57,7 +57,8 @@ type Outcome =
   | {
       kind: "ok"
       account: AccountSummary
-      device: { id?: string; exp?: number }
+      /** Expiry of this browser's trust, when it is a trusted device. */
+      deviceExp?: number
       newDeviceCookie?: string
       releaseEmailShare: boolean
     }
@@ -144,9 +145,7 @@ export const unlock: Route = async (ctx) => {
         }
         return { value: { kind } as Outcome, changed: true }
       }
-      meta.lock.fails += 1
-      const lockFor = lockSecondsAfter(meta.lock.fails)
-      if (lockFor > 0) meta.lock.until = now + lockFor
+      const lockFor = recordFailure(meta.lock, now)
       return {
         value: { kind, ...(lockFor > 0 ? { retryAfter: lockFor } : {}) } as Outcome,
         changed: true,
@@ -200,9 +199,7 @@ export const unlock: Route = async (ctx) => {
       changed = true
     }
 
-    let deviceState: { id?: string; exp?: number } = device
-      ? { id: device.id, exp: device.exp }
-      : {}
+    let deviceExp = device?.exp
     let newDeviceCookie: string | undefined
     const realFactor = mode === "recovery" || totpStep !== null || linkIndex >= 0
     if (!device && trustDevice && realFactor) {
@@ -219,7 +216,7 @@ export const unlock: Route = async (ctx) => {
         .sort((a, b) => b.created - a.created)
         .slice(0, MAX_DEVICES)
       newDeviceCookie = token.value
-      deviceState = { id: record.id, exp: record.exp }
+      deviceExp = record.exp
       changed = true
     }
 
@@ -227,7 +224,7 @@ export const unlock: Route = async (ctx) => {
       value: {
         kind: "ok",
         account: await accountSummary(meta, unsealEmail, record.se !== undefined),
-        device: deviceState,
+        deviceExp,
         newDeviceCookie,
         releaseEmailShare: linkIndex >= 0,
       },
@@ -272,7 +269,6 @@ export const unlock: Route = async (ctx) => {
     vid: current.vid,
     ae: current.ae,
     exp: sessionExp,
-    ...(outcome.device.id ? { did: outcome.device.id } : {}),
   })
 
   const response: UnlockResponse = {
@@ -283,9 +279,7 @@ export const unlock: Route = async (ctx) => {
     srvShare: toBase64Url(srvShare),
     ...(emailShare ? { emailShare: toBase64Url(emailShare) } : {}),
     account: outcome.account,
-    device: outcome.device.exp
-      ? { trusted: true, exp: outcome.device.exp }
-      : { trusted: false },
+    device: outcome.deviceExp ? { trusted: true, exp: outcome.deviceExp } : { trusted: false },
   }
 
   if (mode === "recovery") ctx.waitUntil(notifyRecoveryUsed(ctx, name, record.vid))

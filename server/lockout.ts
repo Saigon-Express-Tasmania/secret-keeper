@@ -13,3 +13,11 @@ export function lockSecondsAfter(failures: number): number {
   if (failures <= FREE_FAILURES) return 0
   return Math.min(2 ** (failures - FREE_FAILURES - 1) * 60, MAX_LOCK_SECONDS)
 }
+
+/** Count one failed attempt; returns the lock that now applies in seconds (0 = none). */
+export function recordFailure(lock: { fails: number; until: number }, nowSeconds: number): number {
+  lock.fails += 1
+  const lockFor = lockSecondsAfter(lock.fails)
+  if (lockFor > 0) lock.until = nowSeconds + lockFor
+  return lockFor
+}
