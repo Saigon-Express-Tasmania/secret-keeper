@@ -2,6 +2,8 @@
 
 Personal vault SPA for passwords, auth keys, wallets, and secret notes. Hosted as a static Netlify app with a pluggable storage backend. The vault is a zip-like JSON archive (folders + JSON files), compressed (CKZ1) and encrypted client-side (Argon2id + AES-GCM / CKV2). R2 download/upload is implemented; other adapters are stubs.
 
+The unlocked vault looks and works like macOS Finder: a window on a desktop with a menu bar, Icons / List / Columns views, Quick Look, Get Info, drag and drop, inline rename, Trash, and Finder keyboard shortcuts. It follows the system Light/Dark appearance. See [docs/screens.md](docs/screens.md).
+
 ## Stack
 
 - Vite + React + TypeScript

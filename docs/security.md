@@ -9,7 +9,8 @@ Credentials Keep is designed so that **storage providers never see plaintext sec
 3. **Opaque blob** — providers store ciphertext bytes only.
 4. **Per-file encryption** — after unlock, the explorer holds folder/file **names** and **file ciphertext**, not every secret in plaintext.
 5. **Decrypt on open** — opening a file AES-GCM-decrypts that one body into viewer-local state; navigating away or Lock clears it.
-6. **Lock clears memory** — payload, master password, object key, file DEK refs, and open-file plaintext are dropped.
+6. **Opt-in previews** — the Finder only decrypts other files when **Show Credentials** is on (off by default), and then only the account files currently on screen (listing, search results, Column preview, Quick Look target). Turning it off drops those decrypted summaries. Trash items are never decrypted.
+7. **Lock clears memory** — payload, master password, object key, file DEK refs, and open-file plaintext are dropped.
 
 ## Crypto
 
@@ -21,7 +22,7 @@ Implemented in `src/lib/crypto/vault.ts` and `src/lib/crypto/pack.ts`.
 | --- | --- |
 | Archive | Zip-like JSON tree (`VaultArchive` v3) |
 | Pack | CKZ1: `deflate-raw` + reversible byte scramble (obscurity only) |
-| Key derivation | Argon2id (`t=3`, `m=65536` KiB ≈ 64 MiB, `p=1`, 32-byte output) |
+| Key derivation | Argon2id (`t=3`, `m=65536` KiB ≈ 64 MiB, `p=1`, 32-byte output), computed with `argon2idAsync` (same output as `argon2id`, but yields so the UI stays responsive) |
 | Pepper | `VITE_VAULT_SALT_KEY` passed as Argon2 `key` (not written into the blob) |
 | Salt | 16 random bytes per encrypt, stored in the blob header |
 | Encryption | AES-256-GCM with 12-byte nonce; AAD = magic + format version |
@@ -46,6 +47,13 @@ Wrong password or wrong env pepper fails GCM authentication and surfaces as **In
 Changing the master password (Dashboard → Change password) re-wraps the outer CKV2 blob only; per-file bodies and the file DEK are unchanged. A failed upload keeps the previous session password.
 
 The master password must never be sent to Netlify, R2, S3, Supabase, or Google Drive as part of vault unlock.
+
+## Session safety in the UI
+
+- **One save at a time.** `commit()` is single-flight and always starts from the latest committed archive; a second save while one is running is refused, and the Finder disables vault-changing commands meanwhile. Overlapping saves can't silently drop a change.
+- **Lock wins.** `lock()` bumps a session counter; a save that completes after locking is discarded instead of putting the archive back into React state. The Finder's Lock (red traffic light / menu) waits for a save in flight, then locks.
+- **Edited files first.** Moving, renaming or trashing a folder that contains the open, edited account asks Save / Don't Save / Cancel before the change, so a later save can't recreate the old path.
+- **No names leak into browser state.** Vault paths never appear in the URL, page title, `localStorage` prefs (`ck:finder` holds layout only), or drag-and-drop data (drags carry an opaque marker; paths stay in page memory). Cut/Copy/Paste of items uses an in-app clipboard. The explicit copy buttons for usernames, passwords and codes do write to the system clipboard.
 
 ## Local replica
 

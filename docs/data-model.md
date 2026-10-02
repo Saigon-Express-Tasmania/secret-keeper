@@ -13,13 +13,19 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue }
 
+type NodeMeta = {
+  createdAt: string  // ISO-8601 (backfilled on unlock for old vaults)
+  modifiedAt: string // ISO-8601
+  icon?: string      // catalog id, e.g. "fluent-color:lock-closed-16"
+}
+
 type FsFile = {
   type: "file"
   nonce: string      // base64, 12 bytes
   ciphertext: string // base64, AES-GCM over UTF-8 JSON bytes
-}
+} & Partial<NodeMeta>
 
-type FsDir = { type: "dir"; entries: Record<string, FsNode> }
+type FsDir = { type: "dir"; entries: Record<string, FsNode> } & Partial<NodeMeta>
 type FsNode = FsFile | FsDir
 
 type RecycleBinEntry = {
@@ -42,7 +48,8 @@ type VaultArchive = {
 - Session / React payload **strips** `fileDek`. The DEK is held as a non-extractable `CryptoKey` (plus bytes for re-pack) outside the tree.
 - Empty vaults seed four directories: `passwords/`, `auth-keys/`, `wallets/`, `notes/`. Extra dirs and files are allowed.
 - Name segments must not be empty, `.`, `..`, or contain `/` or `\`.
-- **Recycle Bin** is archive metadata (`recycleBin`), not a folder in `root`. Soft-delete moves a file or whole folder tree into a bin entry; restore puts it back at `originalPath` (or `name (restored)` if taken); purge removes the entry forever. Missing `recycleBin` is treated as `[]`.
+- `icon` absent (or a default id) means the plain folder / document artwork; the four seed folders fall back to their seed icons by name.
+- The **Trash** (stored as `recycleBin`; called Recycle Bin in older versions) is archive metadata, not a folder in `root`. Soft-delete moves a file or whole folder tree into a bin entry; restore puts it back at `originalPath` (or `name (restored)` if taken); purge removes the entry forever. Missing `recycleBin` is treated as `[]`.
 
 ## Per-file encryption
 
