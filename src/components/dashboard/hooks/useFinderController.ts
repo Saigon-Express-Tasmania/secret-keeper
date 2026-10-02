@@ -156,6 +156,26 @@ export function useFinderController(archive: VaultArchive): FinderController {
   const [editorDirty, setEditorDirty] = useState(false)
   const leave = useLeaveGuard(editorRef)
   const mutations = useFinderMutations(dispatch, alerts)
+  const busy = mutations.busy || vault.saving
+
+  // Leaving an edited file first waits for any save in flight (e.g. ⌘S then
+  // Lock), so the user isn't asked to save something that is being saved.
+  const busyRef = useRef(busy)
+  const idleWaiters = useRef<(() => void)[]>([])
+  useEffect(() => {
+    busyRef.current = busy
+    if (!busy && idleWaiters.current.length > 0) {
+      const waiters = idleWaiters.current
+      idleWaiters.current = []
+      for (const resolve of waiters) resolve()
+    }
+  }, [busy])
+  const confirmLeave = useCallback(async () => {
+    if (busyRef.current) {
+      await new Promise<void>((resolve) => idleWaiters.current.push(resolve))
+    }
+    return leave.confirm()
+  }, [leave])
   const active = useWindowActive()
   const [minimized, setMinimized] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -214,24 +234,24 @@ export function useFinderController(archive: VaultArchive): FinderController {
       const { model: m } = latest.current
       if (m.mode === "file") {
         const same = location.kind === "path" && location.path === m.path
-        if (!same && !(await leave.confirm())) return false
+        if (!same && !(await confirmLeave())) return false
       }
       dispatch({ type: "navigate", location, select: opts?.select, replace: opts?.replace })
       setDrawerOpen(false)
       return true
     },
-    [leave]
+    [confirmLeave]
   )
 
   const goBack = useCallback(async () => {
-    if (latest.current.model.mode === "file" && !(await leave.confirm())) return
+    if (latest.current.model.mode === "file" && !(await confirmLeave())) return
     dispatch({ type: "back" })
-  }, [leave])
+  }, [confirmLeave])
 
   const goForward = useCallback(async () => {
-    if (latest.current.model.mode === "file" && !(await leave.confirm())) return
+    if (latest.current.model.mode === "file" && !(await confirmLeave())) return
     dispatch({ type: "forward" })
-  }, [leave])
+  }, [confirmLeave])
 
   const openItem = useCallback(
     async (item: FinderItem) => {
@@ -273,9 +293,9 @@ export function useFinderController(archive: VaultArchive): FinderController {
     async (paths: string[]) => {
       const { model: m } = latest.current
       if (m.mode !== "file" || !pathIsUnderAny(m.path, paths)) return true
-      return leave.confirm()
+      return confirmLeave()
     },
-    [leave]
+    [confirmLeave]
   )
 
   const validateName = useCallback(
@@ -303,14 +323,14 @@ export function useFinderController(archive: VaultArchive): FinderController {
       if (item.source !== "vault") return
       const { model: m } = latest.current
       if (m.mode === "file") {
-        if (!(await leave.confirm())) return
+        if (!(await confirmLeave())) return
         dispatch({ type: "navigate", location: { kind: "path", path: parentPath(item.path) }, select: [item.key] })
       } else if (!latest.current.state.selection.keys.has(item.key)) {
         dispatch({ type: "setSelection", keys: [item.key] })
       }
       dispatch({ type: "renameStart", key: item.key })
     },
-    [leave]
+    [confirmLeave]
   )
 
   const commitRename = useCallback(
@@ -502,8 +522,7 @@ export function useFinderController(archive: VaultArchive): FinderController {
     dispatch({ type: "info", key: item ? item.key : "" })
   }, [])
 
-  const { lock, saving } = vault
-  const busy = mutations.busy || saving
+  const { lock } = vault
 
   const doLock = useCallback(() => {
     lock()
@@ -511,17 +530,11 @@ export function useFinderController(archive: VaultArchive): FinderController {
   }, [lock, routerNavigate])
 
   const requestLock = useCallback(async () => {
-    if (!(await leave.confirm())) return
-    if (busy) {
-      setLockPending(true)
-      return
-    }
-    doLock()
-  }, [busy, doLock, leave])
-
-  useEffect(() => {
-    if (lockPending && !busy) doLock()
-  }, [busy, doLock, lockPending])
+    if (busyRef.current) setLockPending(true)
+    const ok = await confirmLeave()
+    setLockPending(false)
+    if (ok) doLock()
+  }, [confirmLeave, doLock])
 
   // Warn before closing the tab mid-save or with an edited account.
   const unsaved = busy || editorDirty

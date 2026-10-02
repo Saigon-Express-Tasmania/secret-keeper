@@ -131,7 +131,8 @@ export const COMMANDS = {
     label: "Save",
     shortcuts: [{ key: "s", code: "KeyS", mod: true }],
     allowInEditable: true,
-    enabled: (x) => x.c.model.mode === "file" && x.c.editor.dirty,
+    // Ask the editor directly: React's copy of "dirty" can lag a keystroke.
+    enabled: (x) => x.c.model.mode === "file" && (x.c.editor.ref.current?.isDirty() ?? false),
     run: (x) => x.c.editor.ref.current?.save(),
   },
   "file.getInfo": {
