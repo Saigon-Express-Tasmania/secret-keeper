@@ -60,7 +60,10 @@ export function ColumnView() {
     return false
   }
 
-  const { emphasized, surfaceProps } = useViewSurface({ onKey, onSelectItem: selectItem })
+  const { emphasized, surfaceProps, dropKey, canDrag } = useViewSurface({
+    onKey,
+    onSelectItem: selectItem,
+  })
 
   // Keep the deepest column in view, like Finder.
   const last = columns[columns.length - 1]?.dir
@@ -92,7 +95,11 @@ export function ColumnView() {
             key={col.dir || "/"}
             role="listbox"
             aria-label={col.dir ? col.dir.split("/").pop() : c.vaultName}
-            className="h-full w-[220px] shrink-0 overflow-y-auto border-r border-mac-separator py-1"
+            data-drop-dir={col.dir}
+            className={cn(
+              "h-full w-[220px] shrink-0 overflow-y-auto border-r border-mac-separator py-1",
+              dropKey === `bg:${col.dir}` && "shadow-[inset_0_0_0_2px_var(--mac-accent)]"
+            )}
           >
             {col.items.map((item) => {
               const selected = selection.keys.has(item.key)
@@ -107,8 +114,10 @@ export function ColumnView() {
                   id={domIdFor(item.key)}
                   aria-selected={selected}
                   data-item-key={item.key}
+                  draggable={canDrag && item.source === "vault" && !editing}
                   className={cn(
                     "mx-1.5 flex h-6 items-center gap-1.5 rounded-[5px] px-1.5 text-[13px] select-none pointer-coarse:h-10",
+                    dropKey === item.key && "bg-mac-accent/15 shadow-[inset_0_0_0_2px_var(--mac-accent)]",
                     active && "bg-mac-selection text-white",
                     (selected && !active) || onPath ? "bg-mac-selection-inactive" : null,
                     (c.mutations.pendingKeys.has(item.key) || isCut(clipboard, item)) && "opacity-50"

@@ -2,6 +2,7 @@ import { useRef, useState, type PointerEvent } from "react"
 import { HardDrive, Trash2 } from "lucide-react"
 
 import { useFinder } from "@/components/dashboard/finderContext"
+import { useDropHover } from "@/components/dashboard/hooks/useDropHover"
 import { MenuNodes } from "@/components/dashboard/menus/MenuNodes"
 import { sidebarMenu, type MenuNode } from "@/components/dashboard/menus/model"
 import { sidebarSymbolFor } from "@/components/icons/sidebarSymbols"
@@ -26,6 +27,7 @@ export function FinderSidebar() {
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const drag = useRef<{ x: number; w: number } | null>(null)
   const width = dragWidth ?? c.prefs.sidebarWidth
+  const drop = useDropHover(c)
 
   const browsingHere = (p: string) => mode === "folder" && path === p
 
@@ -87,6 +89,8 @@ export function FinderSidebar() {
                 icon={<HardDrive />}
                 label={c.vaultName}
                 active={browsingHere("")}
+                dropTarget={drop.hover === "root"}
+                {...drop.propsFor("root", "")}
                 onClick={() => void c.navigate({ kind: "path", path: "" })}
               />
               {roots.map((item) => {
@@ -99,6 +103,8 @@ export function FinderSidebar() {
                     label={item.name}
                     active={browsingHere(item.path)}
                     dimmed={clip?.mode === "cut" && clip.paths.includes(item.path)}
+                    dropTarget={drop.hover === item.key}
+                    {...drop.propsFor(item.key, item.path)}
                     onClick={() => void c.navigate({ kind: "path", path: item.path })}
                   />
                 )
@@ -111,6 +117,8 @@ export function FinderSidebar() {
                 label="Trash"
                 active={mode === "trash"}
                 badge={trashCount > 0 ? trashCount : null}
+                dropTarget={drop.hover === "trash"}
+                {...drop.propsFor("trash", { trash: true })}
                 onClick={() => void c.navigate({ kind: "trash" })}
               />
             </SidebarSection>

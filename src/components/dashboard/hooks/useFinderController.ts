@@ -118,6 +118,7 @@ export type FinderController = {
   copyItems: (paths: string[], dest: string) => Promise<void>
   duplicate: (items: FinderItem[]) => Promise<void>
   moveToTrash: (items: FinderItem[]) => Promise<void>
+  trashPaths: (paths: string[]) => Promise<void>
   putBack: (items: FinderItem[]) => Promise<void>
   deleteImmediately: (items: FinderItem[]) => Promise<void>
   emptyTrash: () => Promise<void>
@@ -443,14 +444,19 @@ export function useFinderController(archive: VaultArchive): FinderController {
     [mutations]
   )
 
-  const moveToTrash = useCallback(
-    async (items: FinderItem[]) => {
-      const paths = items.filter((i) => i.source === "vault").map((i) => i.path)
+  const trashPaths = useCallback(
+    async (paths: string[]) => {
       if (paths.length === 0) return
       if (!(await guardOpenFile(paths))) return
       await mutations.trash(paths)
     },
     [guardOpenFile, mutations]
+  )
+
+  const moveToTrash = useCallback(
+    (items: FinderItem[]) =>
+      trashPaths(items.filter((i) => i.source === "vault").map((i) => i.path)),
+    [trashPaths]
   )
 
   const putBack = useCallback(
@@ -599,6 +605,7 @@ export function useFinderController(archive: VaultArchive): FinderController {
     copyItems,
     duplicate,
     moveToTrash,
+    trashPaths,
     putBack,
     deleteImmediately,
     emptyTrash,

@@ -24,6 +24,8 @@ type CellProps = {
   dimmed: boolean
   info: string | null
   rename: "off" | "editing" | "saving"
+  draggable: boolean
+  dropTarget: boolean
 }
 
 function IconCell({
@@ -34,6 +36,8 @@ function IconCell({
   dimmed,
   info,
   rename,
+  draggable,
+  dropTarget,
 }: CellProps) {
   const c = useFinder()
   const isPhantom = item.source === "phantom"
@@ -43,6 +47,7 @@ function IconCell({
       id={domIdFor(item.key)}
       aria-selected={selected}
       data-item-key={item.key}
+      draggable={draggable}
       className={cn(
         "flex min-w-0 flex-col items-center gap-1 rounded-md px-1 py-1.5 select-none",
         dimmed && "opacity-50"
@@ -51,7 +56,8 @@ function IconCell({
       <span
         className={cn(
           "flex items-center justify-center rounded-[6px] p-1",
-          selected && "bg-black/[0.09] dark:bg-white/[0.12]"
+          selected && "bg-black/[0.09] dark:bg-white/[0.12]",
+          dropTarget && "bg-mac-accent/20 ring-2 ring-mac-accent"
         )}
       >
         <FinderIcon kind={iconKind(item)} glyphId={glyphFor(item)} size={size} />
@@ -100,7 +106,7 @@ export function IconView() {
   const size = c.prefs.iconSize
   const cell = Math.max(92, size + 40)
   const cols = Math.max(1, Math.floor((Math.max(0, width - PAD * 2) + GAP) / (cell + GAP)))
-  const { emphasized, surfaceProps } = useViewSurface({ rowLength: cols })
+  const { emphasized, surfaceProps, dropKey, canDrag } = useViewSurface({ rowLength: cols })
   const { items } = c.model
   const { selection, rename, phantom, clipboard } = c.state
 
@@ -111,7 +117,10 @@ export function IconView() {
         ref={contentRef}
         role="listbox"
         aria-label={c.model.title}
-        className="h-full overflow-y-auto overscroll-contain outline-none"
+        className={cn(
+          "h-full overflow-y-auto overscroll-contain outline-none",
+          dropKey === `bg:${c.model.path}` && "shadow-[inset_0_0_0_2px_var(--mac-accent)]"
+        )}
       >
         {items.length === 0 && c.model.mode === "search" ? (
           <p className="pt-16 text-center text-[13px] text-mac-label-3">No Results</p>
@@ -145,6 +154,8 @@ export function IconView() {
                 dimmed={c.mutations.pendingKeys.has(item.key) || isCut(clipboard, item)}
                 info={c.prefs.showItemInfo ? itemInfo(item) : null}
                 rename={editing}
+                draggable={canDrag && item.source === "vault" && editing === "off"}
+                dropTarget={dropKey === item.key}
               />
             )
           })}

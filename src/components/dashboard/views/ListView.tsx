@@ -137,7 +137,9 @@ export function ListView() {
     return false
   }
 
-  const { emphasized, surfaceProps } = useViewSurface({ onKey })
+  const { emphasized, surfaceProps, dropKey, canDrag } = useViewSurface({ onKey })
+  // A drop "into the folder containing this row" highlights that folder.
+  const dropFolder = dropKey?.startsWith("bg:") ? dropKey.slice(3) : dropKey
   const extraColumns =
     c.showCredentials && (mode === "folder" || mode === "search")
       ? credentialColumns(c.credentials)
@@ -187,7 +189,10 @@ export function ListView() {
         ref={contentRef}
         role="treegrid"
         aria-label={c.model.title}
-        className="h-full overflow-auto overscroll-contain outline-none"
+        className={cn(
+          "h-full overflow-auto overscroll-contain outline-none",
+          dropFolder === c.model.path && "shadow-[inset_0_0_0_2px_var(--mac-accent)]"
+        )}
       >
         <div
           role="row"
@@ -218,8 +223,10 @@ export function ListView() {
                 aria-level={tree ? (item.depth ?? 0) + 1 : undefined}
                 aria-expanded={item.expandable ? !!item.expanded : undefined}
                 data-item-key={item.key}
+                draggable={canDrag && item.source === "vault" && !editing}
                 className={cn(
                   "group/row mx-2.5 grid h-6 items-center rounded-[5px] text-[13px] select-none pointer-coarse:h-10",
+                  dropFolder === item.key && "bg-mac-accent/15 shadow-[inset_0_0_0_2px_var(--mac-accent)]",
                   index % 2 === 1 && !selected && "bg-mac-row-alt",
                   selected && (emphasized ? "bg-mac-selection text-white" : "bg-mac-selection-inactive"),
                   selected && prevSel && "rounded-t-none",

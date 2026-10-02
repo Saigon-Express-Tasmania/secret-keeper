@@ -3,13 +3,23 @@ import {
   useEffect,
   useRef,
   useState,
+  type DragEvent,
   type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
 } from "react"
 
+import {
+  acceptDrag,
+  beginDrag,
+  endDrag,
+  performDrop,
+  type DropDest,
+} from "@/components/dashboard/dnd"
 import { useFinder } from "@/components/dashboard/finderContext"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { parentPath } from "@/lib/vault/fs"
 import { resolveCommand } from "@/components/dashboard/hooks/useFinderCommands"
 import { nameCollator } from "@/lib/finder/sort"
 import { IS_MAC, isEditableTarget } from "@/lib/finder/shortcuts"
@@ -47,6 +57,9 @@ type SurfaceOptions = {
 export function useViewSurface({ rowLength = 1, onKey, onSelectItem }: SurfaceOptions = {}) {
   const c = useFinder()
   const [focusWithin, setFocusWithin] = useState(false)
+  /** Key of the folder (or `bg:<dir>`) highlighted as the drop target. */
+  const [dropKey, setDropKey] = useState<string | null>(null)
+  const finePointer = useMediaQuery("(pointer: fine)")
   const typed = useRef({ text: "", at: 0 })
   const deferredKey = useRef<string | null>(null)
   const touchKey = useRef<string | null>(null)
@@ -244,6 +257,79 @@ export function useViewSurface({ rowLength = 1, onKey, onSelectItem }: SurfaceOp
     [c, model.itemsByKey]
   )
 
+  /** Folder a drop at this event lands in (null = not a drop target). */
+  const dropTargetFor = useCallback(
+    (target: EventTarget | null): { dest: DropDest; key: string } | null => {
+      if (model.mode === "trash" || model.mode === "file") return null
+      const key = itemKeyFrom(target)
+      const item = key ? model.itemsByKey.get(key) : undefined
+      if (item && item.source === "vault" && item.kind === "dir") {
+        return { dest: item.path, key: item.key }
+      }
+      if (model.mode === "search") return null
+      if (item && item.source === "vault") {
+        const dir = parentPath(item.path)
+        return { dest: dir, key: `bg:${dir}` }
+      }
+      const column =
+        target instanceof Element ? target.closest<HTMLElement>("[data-drop-dir]") : null
+      const dir = column?.dataset.dropDir ?? model.path
+      return { dest: dir, key: `bg:${dir}` }
+    },
+    [model]
+  )
+
+  const onDragStart = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      const key = itemKeyFrom(e.target)
+      const item = key ? model.itemsByKey.get(key) : undefined
+      if (!item || item.source !== "vault" || state.rename || state.phantom) {
+        e.preventDefault()
+        return
+      }
+      deferredKey.current = null
+      let paths: string[]
+      if (state.selection.keys.has(item.key)) {
+        paths = model.selectedItems.filter((i) => i.source === "vault").map((i) => i.path)
+      } else {
+        dispatch({ type: "setSelection", keys: [item.key] })
+        paths = [item.path]
+      }
+      beginDrag(e, paths)
+    },
+    [dispatch, model, state]
+  )
+
+  const onDragOver = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      const target = dropTargetFor(e.target)
+      if (!target || !acceptDrag(c, target.dest, e)) {
+        setDropKey(null)
+        return
+      }
+      setDropKey(target.key)
+    },
+    [c, dropTargetFor]
+  )
+
+  const onDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropKey(null)
+  }, [])
+
+  const onDrop = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      setDropKey(null)
+      const target = dropTargetFor(e.target)
+      if (target) performDrop(c, target.dest, e)
+    },
+    [c, dropTargetFor]
+  )
+
+  const onDragEnd = useCallback(() => {
+    setDropKey(null)
+    endDrag()
+  }, [])
+
   const onFocus = useCallback(() => setFocusWithin(true), [])
   const onBlur = useCallback((e: FocusEvent<HTMLDivElement>) => {
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocusWithin(false)
@@ -252,7 +338,15 @@ export function useViewSurface({ rowLength = 1, onKey, onSelectItem }: SurfaceOp
   const focus = state.selection.focus
   return {
     emphasized,
+    dropKey,
+    /** Items may be dragged (mouse/trackpad only; touch has no drag and drop). */
+    canDrag: finePointer && !c.busy,
     surfaceProps: {
+      onDragStart,
+      onDragOver,
+      onDragLeave,
+      onDrop,
+      onDragEnd,
       tabIndex: 0,
       "aria-multiselectable": true,
       "aria-activedescendant": focus && model.itemsByKey.has(focus) ? domIdFor(focus) : undefined,

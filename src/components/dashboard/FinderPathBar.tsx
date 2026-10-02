@@ -1,6 +1,7 @@
 import { HardDrive, Trash2 } from "lucide-react"
 
 import { useFinder } from "@/components/dashboard/finderContext"
+import { useDropHover } from "@/components/dashboard/hooks/useDropHover"
 import { glyphFor } from "@/components/dashboard/views/itemDisplay"
 import { FinderIcon } from "@/components/icons/FinderIcon"
 import { PathBar, type PathBarSegment } from "@/components/mac/PathBar"
@@ -11,6 +12,7 @@ import { splitPath } from "@/lib/vault/fs"
 export function FinderPathBar() {
   const c = useFinder()
   const { mode, selectedItems, path } = c.model
+  const drop = useDropHover(c)
 
   if (mode === "trash") {
     return (
@@ -29,6 +31,8 @@ export function FinderPathBar() {
       label: c.vaultName,
       icon: <HardDrive className="text-mac-label-2" />,
       onActivate: () => void c.navigate({ kind: "path", path: "" }),
+      props: drop.propsFor("", ""),
+      dropTarget: drop.hover === "",
     },
   ]
   for (let i = 0; i < parts.length; i++) {
@@ -41,6 +45,9 @@ export function FinderPathBar() {
       label: item.name,
       icon: <FinderIcon kind={node.type === "dir" ? "folder" : "file"} glyphId={glyphFor(item)} size={14} />,
       onActivate: () => void c.navigate({ kind: "path", path: p }),
+      ...(node.type === "dir"
+        ? { props: drop.propsFor(p, p), dropTarget: drop.hover === p }
+        : {}),
     })
   }
   return <PathBar segments={segments} />
