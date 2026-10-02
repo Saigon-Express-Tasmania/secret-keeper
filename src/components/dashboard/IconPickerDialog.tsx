@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react"
 import { Icon } from "@iconify/react"
-import { Search } from "lucide-react"
+import { Link2, Search } from "lucide-react"
 
+import { NodeIcon } from "@/components/icons/NodeIcon"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   ICON_GROUP_LABELS,
   ICON_GROUP_ORDER,
@@ -19,12 +21,17 @@ import {
   type CatalogIcon,
   type IconGroupId,
 } from "@/lib/icons/catalog"
+import {
+  MAX_ICON_URL_LENGTH,
+  isExternalIconUrl,
+  parseExternalIconUrl,
+} from "@/lib/icons/external"
 import { cn } from "@/lib/utils"
 
 type IconPickerDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Current icon id (catalog form). */
+  /** Current icon: catalog id or `https://` image URL. */
   value?: string
   kind?: "folder" | "file"
   onSelect: (iconId: string) => void
@@ -42,7 +49,11 @@ export function IconPickerDialog({
   onReset,
   title = "Choose icon",
 }: IconPickerDialogProps) {
-  const [pending, setPending] = useState<string | undefined>(value)
+  // Catalog selection; an external URL lives in `urlInput` instead.
+  const [pending, setPending] = useState<string | undefined>(() =>
+    initialCatalogValue(value)
+  )
+  const [urlInput, setUrlInput] = useState(() => initialUrlValue(value))
   const [query, setQuery] = useState("")
 
   // Sync pending when dialog opens
@@ -50,10 +61,19 @@ export function IconPickerDialog({
   if (open !== prevOpen) {
     setPrevOpen(open)
     if (open) {
-      setPending(value)
+      setPending(initialCatalogValue(value))
+      setUrlInput(initialUrlValue(value))
       setQuery("")
     }
   }
+
+  const usingUrl = urlInput.trim() !== ""
+  const urlResult = usingUrl ? parseExternalIconUrl(urlInput) : null
+  const selection = urlResult
+    ? urlResult.ok
+      ? urlResult.url
+      : undefined
+    : pending
 
   const icons = useMemo(() => iconsForPicker(kind), [kind])
 
@@ -80,8 +100,8 @@ export function IconPickerDialog({
   }, [filtered])
 
   function handleConfirm() {
-    if (pending) {
-      onSelect(pending)
+    if (selection) {
+      onSelect(selection)
       onOpenChange(false)
     }
   }
@@ -92,10 +112,46 @@ export function IconPickerDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Pick an icon for this {kind ?? "item"}. Icons are bundled with the
-            app and never fetched ({icons.length} available).
+            Pick a built-in icon for this {kind ?? "item"} ({icons.length}{" "}
+            available, stored offline) or use an image URL.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="icon-url">Image URL</Label>
+          <div className="flex items-center gap-2">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/40">
+              {urlResult?.ok ? (
+                <NodeIcon iconId={urlResult.url} kind={kind ?? "file"} size={24} />
+              ) : (
+                <Link2 className="size-4 text-muted-foreground" />
+              )}
+            </div>
+            <Input
+              id="icon-url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={MAX_ICON_URL_LENGTH}
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="https://example.com/logo.png"
+              aria-invalid={urlResult ? !urlResult.ok : undefined}
+              aria-describedby="icon-url-hint"
+            />
+          </div>
+          {urlResult && !urlResult.ok ? (
+            <p id="icon-url-hint" className="text-xs text-destructive" role="alert">
+              {urlResult.error}
+            </p>
+          ) : (
+            <p id="icon-url-hint" className="text-xs text-muted-foreground">
+              HTTPS images only. The image is loaded from that site each time
+              it&apos;s shown, so the host can see when the vault is viewed.
+            </p>
+          )}
+        </div>
 
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -125,13 +181,16 @@ export function IconPickerDialog({
                 </div>
                 <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-12">
                   {items.map((icon) => {
-                    const selected = pending === icon.id
+                    const selected = !usingUrl && pending === icon.id
                     return (
                       <button
                         key={icon.id}
                         type="button"
                         title={icon.label}
-                        onClick={() => setPending(icon.id)}
+                        onClick={() => {
+                          setPending(icon.id)
+                          setUrlInput("")
+                        }}
                         className={cn(
                           "flex aspect-square items-center justify-center rounded-md border p-1.5 transition-colors",
                           icon.id.startsWith("icon-park:") && "dark:bg-white/85",
@@ -173,11 +232,19 @@ export function IconPickerDialog({
           >
             Cancel
           </Button>
-          <Button type="button" disabled={!pending} onClick={handleConfirm}>
+          <Button type="button" disabled={!selection} onClick={handleConfirm}>
             Apply
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
+}
+
+function initialCatalogValue(value: string | undefined): string | undefined {
+  return value && !isExternalIconUrl(value) ? value : undefined
+}
+
+function initialUrlValue(value: string | undefined): string {
+  return value && isExternalIconUrl(value) ? value : ""
 }

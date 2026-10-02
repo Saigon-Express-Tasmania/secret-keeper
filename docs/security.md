@@ -59,6 +59,15 @@ The master password must never be sent to Netlify, R2, S3, Supabase, or Google D
 
 A ciphertext-only copy is kept in `localStorage` (`credentials-keep:vault:<objectKey>`). Unlock always tries to merge local and remote (stub currently prefers remote). Password and derived keys are never written to disk.
 
+## External icon URLs
+
+A file or folder icon can be an external image URL instead of a built-in catalog icon (`src/lib/icons/external.ts`). Vault data (including an imported vault) is untrusted, so these rules apply:
+
+- **HTTPS only.** `parseExternalIconUrl` accepts only absolute `https:` URLs with a host. It rejects `javascript:`, `data:`, `blob:`, `file:`, `http:` and every other scheme, as well as embedded credentials (`user:pass@`), whitespace or control characters, and anything over 2048 characters. The same check runs when an icon is written (`mkdir`, `putFile`, `setNodeIcon`) and again on **every render** (`NodeIcon`). An invalid value falls back to the default icon.
+- **`<img>` only.** The URL is only ever used as the `src` of a plain `<img>` (`referrerPolicy="no-referrer"`, lazy). Browsers render image documents, SVG included, in secure static mode: no script runs, no sub-resources load, and the content can't touch the page. The app never `fetch()`es the URL or injects its content as markup, and never puts it in `<object>`, `<embed>`, `<iframe>`, CSS or Iconify. A broken or non-image response falls back to the default icon.
+- **CSP.** `netlify.toml` sends a Content-Security-Policy with `script-src 'self'`, `object-src 'none'`, `frame-src 'none'` and `base-uri 'none'`. Even if a future bug rendered a URL somewhere unsafe, external scripts, plugins and frames would still be blocked. `img-src` allows `https:` so icons can load. `connect-src` is limited to the app origin and `*.r2.cloudflarestorage.com`; extend it if another storage adapter is enabled.
+- **Privacy tradeoff.** External images are hotlinked, not stored in the vault. Each time one is shown, the image host can see your IP address and when you viewed the vault, and the browser may send that host's own cookies. Built-in icons stay fully offline.
+
 ## Env credentials tradeoff
 
 Vite embeds any `VITE_*` variable into the client bundle. That is convenient for scaffolding and matches “credentials in `.env`,” but **storage API secrets must not ship to end-user browsers** in production.
