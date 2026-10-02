@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "vite-node scripts/dev-api.ts",
+    "dev:netlify": "npx --yes netlify-cli@27 dev",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
@@ -36,6 +38,7 @@
     "@iconify-json/fluent-color": "^1.2.21",
     "@iconify-json/icon-park": "^1.2.4",
     "@iconify-json/vscode-icons": "^1.2.76",
+    "@netlify/functions": "^6.0.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/qrcode": "^1.5.6",

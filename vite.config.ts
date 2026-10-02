@@ -55,4 +55,11 @@ export default defineConfig({
       '@': path.resolve(rootDir, './src'),
     },
   },
+  server: {
+    // Local vault API (npm run dev:api). Under `netlify dev` (port 8888) the
+    // Function is served directly and this proxy is not used.
+    proxy: {
+      '/api': process.env.CK_API_URL ?? 'http://localhost:8787',
+    },
+  },
 })
