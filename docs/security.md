@@ -1,5 +1,7 @@
 # Security
 
+> **Audit:** see [security-audit.md](./security-audit.md) for the current findings and their remediation status. Sections below describe the design as it is today; they are rewritten as the remediation phases land.
+
 Credentials Keep is designed so that **storage providers never see plaintext secrets**. The master password and any decrypted file body live only in the browser session.
 
 ## Principles

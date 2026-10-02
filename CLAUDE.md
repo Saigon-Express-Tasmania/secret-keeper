@@ -8,11 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # Vite dev server (http://localhost:5173)
 npm run build        # tsc -b && vite build
 npm run lint         # oxlint
+npm test             # vitest (node env); *.test.ts next to sources
 npm run import-kdbx  # scripts/import-kdbx.ts via vite-node (KeePass import)
 npm run expand-icons # regenerate icon JSON catalogs in src/lib/icons
 ```
 
-There is no test runner configured. `@/` aliases `src/`. Setup requires `.env.local` copied from `.env.example` (Cloudflare R2 credentials + `VITE_VAULT_SALT_KEY`); restart the dev server after env changes. Full R2/CORS setup is in [README.md](README.md).
+Tests use vitest (`vitest.config.ts`, node environment). `@/` aliases `src/`. Setup requires `.env.local` copied from `.env.example` (Cloudflare R2 credentials + `VITE_VAULT_SALT_KEY`); restart the dev server after env changes. Full R2/CORS setup is in [README.md](README.md).
 
 ## Architecture
 

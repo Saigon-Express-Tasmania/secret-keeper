@@ -1,6 +1,10 @@
 [build]
-  command = "npm run build"
+  # npm ci installs exactly what package-lock.json pins (with integrity hashes).
+  command = "npm ci && npm run build"
   publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
 
 [[redirects]]
   from = "/*"
