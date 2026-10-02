@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronRight, type LucideIcon } from "lucide-react"
 
 import {
   Collapsible,
@@ -10,118 +10,77 @@ import { cn } from "@/lib/utils"
 
 export type SectionTone = "sky" | "amber" | "emerald" | "violet" | "rose"
 
-const TONE_STYLES: Record<
-  SectionTone,
-  { border: string; header: string; body: string; chevron: string }
-> = {
-  sky: {
-    border: "border-sky-200 dark:border-sky-800",
-    header:
-      "bg-sky-50 text-sky-950 hover:bg-sky-100/80 dark:bg-sky-950/40 dark:text-sky-50 dark:hover:bg-sky-950/60",
-    body: "border-t border-sky-100 bg-sky-50/40 dark:border-sky-900 dark:bg-sky-950/20",
-    chevron: "text-sky-600 dark:text-sky-400",
-  },
-  amber: {
-    border: "border-amber-200 dark:border-amber-800",
-    header:
-      "bg-amber-50 text-amber-950 hover:bg-amber-100/80 dark:bg-amber-950/40 dark:text-amber-50 dark:hover:bg-amber-950/60",
-    body: "border-t border-amber-100 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20",
-    chevron: "text-amber-600 dark:text-amber-400",
-  },
-  emerald: {
-    border: "border-emerald-200 dark:border-emerald-800",
-    header:
-      "bg-emerald-50 text-emerald-950 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:text-emerald-50 dark:hover:bg-emerald-950/60",
-    body: "border-t border-emerald-100 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/20",
-    chevron: "text-emerald-600 dark:text-emerald-400",
-  },
-  violet: {
-    border: "border-violet-200 dark:border-violet-800",
-    header:
-      "bg-violet-50 text-violet-950 hover:bg-violet-100/80 dark:bg-violet-950/40 dark:text-violet-50 dark:hover:bg-violet-950/60",
-    body: "border-t border-violet-100 bg-violet-50/40 dark:border-violet-900 dark:bg-violet-950/20",
-    chevron: "text-violet-600 dark:text-violet-400",
-  },
-  rose: {
-    border: "border-rose-200 dark:border-rose-800",
-    header:
-      "bg-rose-50 text-rose-950 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:text-rose-50 dark:hover:bg-rose-950/60",
-    body: "border-t border-rose-100 bg-rose-50/40 dark:border-rose-900 dark:bg-rose-950/20",
-    chevron: "text-rose-600 dark:text-rose-400",
-  },
-}
-
-const ACCENT_BAR: Record<SectionTone, string> = {
-  sky: "bg-sky-500",
-  amber: "bg-amber-500",
-  emerald: "bg-emerald-500",
-  violet: "bg-violet-500",
-  rose: "bg-rose-500",
+/** System Settings–style badge colours per section tone. */
+const BADGE: Record<SectionTone, string> = {
+  sky: "bg-mac-blue",
+  amber: "bg-mac-orange",
+  emerald: "bg-mac-green",
+  violet: "bg-mac-purple",
+  rose: "bg-mac-pink",
 }
 
 type EditorSectionProps = {
   title: string
   description?: string
   tone: SectionTone
+  icon?: LucideIcon
   defaultOpen?: boolean
   children: ReactNode
 }
 
+/** Grouped, collapsible form section in the style of macOS System Settings. */
 export function EditorSection({
   title,
   description,
   tone,
+  icon: Icon,
   defaultOpen = true,
   children,
 }: EditorSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
-  const styles = TONE_STYLES[tone]
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div
-        className={cn(
-          "overflow-hidden rounded-lg border shadow-sm",
-          styles.border
-        )}
-      >
+      <section className="overflow-hidden rounded-[10px] bg-mac-group shadow-[0_0_0_0.5px_var(--mac-separator),0_0.5px_2px_rgb(0_0_0/0.05)]">
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className={cn(
-              "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors",
-              styles.header
-            )}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors outline-none select-none hover:bg-mac-hover focus-visible:bg-mac-hover"
           >
             <span
-              className={cn("h-4 w-1 shrink-0 rounded-full", ACCENT_BAR[tone])}
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-[6px] text-white shadow-[inset_0_0.5px_0_rgb(255_255_255/0.3),0_0.5px_1px_rgb(0_0_0/0.2)]",
+                BADGE[tone]
+              )}
               aria-hidden
-            />
-            <span className="flex min-w-0 flex-1 items-baseline gap-2">
-              <span className="shrink-0 text-sm font-semibold tracking-tight">
+            >
+              {Icon ? <Icon className="size-3.5" strokeWidth={2.25} /> : null}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[13px] leading-tight font-semibold text-mac-label">
                 {title}
               </span>
               {description ? (
-                <span className="truncate text-xs opacity-70">
+                <span className="truncate text-[11px] leading-tight text-mac-label-2">
                   {description}
                 </span>
               ) : null}
             </span>
-            <ChevronDown
+            <ChevronRight
               className={cn(
-                "size-4 shrink-0 transition-transform duration-200",
-                styles.chevron,
-                open ? "rotate-0" : "-rotate-90"
+                "size-3.5 shrink-0 text-mac-label-3 transition-transform duration-200",
+                open && "rotate-90"
               )}
+              strokeWidth={2.25}
             />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className={cn("@container space-y-3 p-3", styles.body)}>
+          <div className="@container space-y-3 border-t border-mac-separator px-3 py-3">
             {children}
           </div>
         </CollapsibleContent>
-      </div>
+      </section>
     </Collapsible>
   )
 }

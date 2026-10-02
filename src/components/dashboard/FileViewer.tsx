@@ -82,7 +82,7 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
 
   if (state.status === "loading") {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 p-8 text-sm text-sky-800">
+      <div className="flex flex-1 items-center justify-center gap-2 p-8 text-[13px] text-mac-label-2">
         <Loader2 className="size-4 animate-spin" />
         Decrypting…
       </div>
@@ -91,7 +91,7 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
 
   if (state.status === "error") {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-destructive">
+      <div className="flex flex-1 items-center justify-center p-8 text-[13px] text-mac-red">
         {state.message}
       </div>
     )
@@ -108,7 +108,7 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
         editorRef={editorRef}
         meta={
           <>
-            <div className="flex min-w-0 items-center gap-2 text-sky-950">
+            <div className="flex min-w-0 items-center gap-2 text-mac-label">
               <NodeIcon
                 iconId={
                   fileNode ? resolveNodeIcon(fileNode, name) : undefined
@@ -117,7 +117,7 @@ export function FileViewer({ path, editorRef }: FileViewerProps) {
                 size={18}
               />
               <span className="truncate font-medium">{name}</span>
-              <span title={DECRYPTED_NOTE} className="shrink-0 text-sky-600">
+              <span title={DECRYPTED_NOTE} className="shrink-0 text-mac-label-2">
                 <Lock className="size-3.5" aria-hidden />
                 <span className="sr-only">{DECRYPTED_NOTE}</span>
               </span>

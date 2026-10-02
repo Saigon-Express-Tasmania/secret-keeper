@@ -35,14 +35,14 @@ export function PasswordGenerator({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200/80 bg-amber-50/60 px-2.5 py-2 dark:border-amber-800 dark:bg-amber-950/30",
+        "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-black/[0.035] px-2.5 py-2 shadow-[inset_0_0_0_0.5px_var(--mac-separator)] dark:bg-white/[0.05]",
         className
       )}
     >
       <div className="flex items-center gap-1.5">
         <label
           htmlFor="pw-len"
-          className="text-xs font-medium text-amber-900 dark:text-amber-100"
+          className="text-[12px] text-mac-label"
         >
           Length
         </label>
@@ -56,22 +56,22 @@ export function PasswordGenerator({
             const n = Number.parseInt(e.target.value, 10)
             if (Number.isFinite(n)) setLength(Math.min(64, Math.max(8, n)))
           }}
-          className="h-8 w-20 bg-background"
+          className="w-20"
         />
       </div>
-      <label className="flex items-center gap-2 text-xs font-medium text-amber-900 dark:text-amber-100">
+      <label className="flex items-center gap-2 text-[12px] text-mac-label">
         <input
           type="checkbox"
           checked={symbols}
           onChange={(e) => setSymbols(e.target.checked)}
-          className="size-3.5 rounded border"
+          className="size-3.5 accent-mac-accent"
         />
         Symbols
       </label>
       <Button
         type="button"
         size="sm"
-        variant="secondary"
+        variant="outline"
         className="ml-auto"
         onClick={() => onGenerate(generatePassword(length, symbols))}
       >

@@ -10,6 +10,7 @@ import { ChevronRight, ImageUp, Loader2, QrCode } from "lucide-react"
 import { CopyButton } from "@/components/editor/CopyButton"
 import { OtpQrDialog } from "@/components/editor/OtpQrDialog"
 import { SecretField } from "@/components/editor/SecretField"
+import { SegmentedControl } from "@/components/mac/SegmentedControl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,7 +24,6 @@ import {
 import { generateOtpCode } from "@/lib/otp/otp"
 import { tryParseOtpauthOrNull } from "@/lib/otp/otpauth"
 import { decodeQrFromImage, firstImageFrom, isImageFile } from "@/lib/otp/qr"
-import { cn } from "@/lib/utils"
 
 type QrStatus =
   | { kind: "idle" }
@@ -154,46 +154,33 @@ export function OtpPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["off", "Off"],
-            ["totp", "TOTP"],
-            ["hotp", "HOTP"],
-          ] as const
-        ).map(([value, label]) => (
-          <Button
-            key={value}
-            type="button"
-            size="sm"
-            variant={mode === value ? "default" : "outline"}
-            className={cn(
-              mode === value &&
-                "bg-violet-700 text-white hover:bg-violet-700/90"
-            )}
-            onClick={() => setMode(value)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
+      <SegmentedControl
+        aria-label="One-time password type"
+        value={mode}
+        onValueChange={setMode}
+        items={[
+          { value: "off", label: "Off" },
+          { value: "totp", label: "TOTP" },
+          { value: "hotp", label: "HOTP" },
+        ]}
+      />
 
       {!otp ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[12px] text-mac-label-2">
           Enable TOTP or HOTP to store authenticator settings and generate
           codes.
         </p>
       ) : (
         <>
-          <div className="rounded-lg border border-violet-200 bg-gradient-to-br from-violet-100/80 to-fuchsia-50 p-3 dark:border-violet-800 dark:from-violet-950/50 dark:to-fuchsia-950/30">
+          <div className="rounded-lg bg-black/[0.035] p-3 shadow-[inset_0_0_0_0.5px_var(--mac-separator)] dark:bg-white/[0.05]">
             {result?.ok ? (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
+                    <p className="text-[11px] font-medium text-mac-label-2">
                       Current code
                     </p>
-                    <p className="mt-0.5 font-mono text-2xl font-semibold tracking-[0.2em] text-violet-950 tabular-nums dark:text-violet-50">
+                    <p className="mt-0.5 font-mono text-2xl font-semibold tracking-[0.2em] text-mac-label tabular-nums">
                       {result.code}
                     </p>
                   </div>
@@ -230,13 +217,13 @@ export function OtpPanel({
                 </div>
                 {otp.type === "totp" && remaining !== null ? (
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-violet-700 dark:text-violet-300">
+                    <div className="flex justify-between text-[11px] text-mac-label-2">
                       <span>Refreshes in {remaining}s</span>
                       <span>{period}s period</span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-violet-200/80 dark:bg-violet-900">
+                    <div className="h-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
                       <div
-                        className="h-full rounded-full bg-violet-600 transition-[width] duration-500 ease-linear dark:bg-violet-400"
+                        className="h-full rounded-full bg-mac-purple transition-[width] duration-500 ease-linear"
                         style={{ width: `${Math.max(0, progress) * 100}%` }}
                       />
                     </div>
@@ -244,7 +231,7 @@ export function OtpPanel({
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm text-destructive">
+              <p className="text-[12px] text-mac-red">
                 {result?.ok === false ? result.error : "Enter a secret."}
               </p>
             )}
@@ -298,16 +285,16 @@ export function OtpPanel({
               }}
             />
             {qrStatus.kind === "error" ? (
-              <p className="text-xs text-destructive">{qrStatus.message}</p>
+              <p className="text-[11px] text-mac-red">{qrStatus.message}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] text-mac-label-2">
                 {qrStatus.kind === "busy"
                   ? "Reading QR code…"
                   : "Paste, drop, or browse a QR code image."}
               </p>
             )}
             {dragging ? (
-              <div className="pointer-events-none absolute -inset-2 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-500 bg-violet-50/90 text-sm font-medium text-violet-700 dark:bg-violet-950/90 dark:text-violet-200">
+              <div className="pointer-events-none absolute -inset-2 flex items-center justify-center rounded-lg border-2 border-dashed border-mac-accent bg-mac-content/90 text-[13px] font-medium text-mac-accent">
                 Drop QR image
               </div>
             ) : null}
@@ -318,7 +305,7 @@ export function OtpPanel({
               <Label htmlFor="otp-algo">Algorithm</Label>
               <select
                 id="otp-algo"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-7 w-full rounded-md border border-mac-field-border bg-mac-control px-2 text-[13px] shadow-[0_0.5px_1px_rgb(0_0_0/0.08)] outline-none focus-visible:ring-[3px] focus-visible:ring-mac-focus pointer-coarse:h-9"
                 value={otp.algorithm}
                 onChange={(e) =>
                   patch({ algorithm: e.target.value as OtpAlgorithm })
@@ -333,7 +320,7 @@ export function OtpPanel({
               <Label htmlFor="otp-digits">Digits</Label>
               <select
                 id="otp-digits"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-7 w-full rounded-md border border-mac-field-border bg-mac-control px-2 text-[13px] shadow-[0_0.5px_1px_rgb(0_0_0/0.08)] outline-none focus-visible:ring-[3px] focus-visible:ring-mac-focus pointer-coarse:h-9"
                 value={otp.digits}
                 onChange={(e) =>
                   patch({

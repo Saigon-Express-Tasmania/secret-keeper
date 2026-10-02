@@ -455,7 +455,7 @@ export function Dashboard() {
 
   return (
     <div className="relative flex h-svh flex-col overflow-hidden">
-      <AppBackdrop blurred />
+      <AppBackdrop variant="desktop" />
       <header className="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b border-emerald-200/70 bg-gradient-to-r from-emerald-50/90 via-white/70 to-sky-50/80 px-3 shadow-sm shadow-emerald-900/5 backdrop-blur-md">
         <div className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-2 py-1 text-white shadow-sm shadow-emerald-700/30">
           <LockKeyhole className="size-3.5" />

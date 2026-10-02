@@ -9,10 +9,13 @@ import {
 } from "react"
 import {
   ExternalLink,
+  Globe,
+  KeyRound,
+  LifeBuoy,
   Loader2,
   Plus,
-  RotateCcw,
-  Save,
+  StickyNote,
+  Timer,
   Trash2,
 } from "lucide-react"
 
@@ -32,7 +35,6 @@ import {
   type AccountEntry,
 } from "@/lib/account/schema"
 import type { JsonValue } from "@/lib/vault/fs"
-import { cn } from "@/lib/utils"
 
 export type AccountEditorHandle = {
   isDirty: () => boolean
@@ -49,6 +51,8 @@ type AccountEditorProps = {
   editorRef?: MutableRefObject<AccountEditorHandle | null>
   /** File info rendered at the start of the save toolbar. */
   meta?: ReactNode
+  /** Notified whenever the unsaved-changes state flips (false on unmount). */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 function isHttpUrl(value: string): boolean {
@@ -67,6 +71,7 @@ export function AccountEditor({
   onSave,
   editorRef,
   meta,
+  onDirtyChange,
 }: AccountEditorProps) {
   const parsed = useMemo(() => parseAccount(initialJson), [initialJson])
   const [entry, setEntry] = useState<AccountEntry>(parsed)
@@ -86,6 +91,15 @@ export function AccountEditor({
   }, [initialJson])
 
   const dirty = !accountsEqual(entry, baseline)
+
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange
+  }, [onDirtyChange])
+  useEffect(() => {
+    onDirtyChangeRef.current?.(dirty)
+  }, [dirty])
+  useEffect(() => () => onDirtyChangeRef.current?.(false), [])
 
   const patch = useCallback((partial: Partial<AccountEntry>) => {
     setEntry((prev) => ({ ...prev, ...partial }))
@@ -169,23 +183,19 @@ export function AccountEditor({
   const canOpenUrl = isHttpUrl(entry.url)
 
   return (
-    <div className="@container flex min-h-0 flex-1 flex-col">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-sky-200/70 bg-gradient-to-r from-sky-50/95 to-emerald-50/90 px-3 py-1.5 backdrop-blur">
+    <div className="@container flex min-h-0 flex-1 flex-col bg-mac-page">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-mac-separator bg-mac-content/90 px-3 py-1.5 backdrop-blur-xl">
         {meta ? (
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-sky-800">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-mac-label-2">
             {meta}
           </div>
         ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span
-            className={cn(
-              "text-xs font-medium",
-              dirty
-                ? "text-amber-700 dark:text-amber-400"
-                : "text-emerald-700 dark:text-emerald-400"
-            )}
+            className="text-[11px] text-mac-label-2"
+            aria-live="polite"
           >
-            {dirty ? "Unsaved changes" : "Saved"}
+            {dirty ? "Edited" : "Saved"}
           </span>
           <Button
             type="button"
@@ -194,8 +204,7 @@ export function AccountEditor({
             disabled={!dirty || saving}
             onClick={discard}
           >
-            <RotateCcw />
-            Discard
+            Revert
           </Button>
           <Button
             type="button"
@@ -203,25 +212,26 @@ export function AccountEditor({
             disabled={!dirty || saving}
             onClick={() => void save()}
           >
-            {saving ? <Loader2 className="animate-spin" /> : <Save />}
+            {saving ? <Loader2 className="animate-spin" /> : null}
             Save
           </Button>
         </div>
       </div>
 
       {errorText ? (
-        <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+        <div className="border-b border-mac-red/30 bg-mac-red/10 px-3 py-1.5 text-[12px] text-mac-red">
           {errorText}
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-auto p-3">
-        <div className="mx-auto grid w-full max-w-7xl items-start gap-3 @4xl:grid-cols-2">
-          <div className="flex min-w-0 flex-col gap-3">
+      <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div className="mx-auto grid w-full max-w-6xl items-start gap-4 @4xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-4">
             <EditorSection
               title="Account"
               description="Title, description, and service URL"
               tone="sky"
+              icon={Globe}
               defaultOpen
             >
               <div className="grid gap-3 @md:grid-cols-2">
@@ -285,6 +295,7 @@ export function AccountEditor({
               title="Login"
               description="Username and password"
               tone="amber"
+              icon={KeyRound}
               defaultOpen
             >
               <div className="grid gap-3 @lg:grid-cols-2">
@@ -314,6 +325,7 @@ export function AccountEditor({
               title="Recovery"
               description="Recovery email and backup codes"
               tone="emerald"
+              icon={LifeBuoy}
               defaultOpen={false}
             >
               <div className="space-y-1">
@@ -350,7 +362,7 @@ export function AccountEditor({
                   </div>
                 </div>
                 {entry.recoveryKeys.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[12px] text-mac-label-2">
                     No recovery keys yet. Add backup codes from the service.
                   </p>
                 ) : (
@@ -383,11 +395,12 @@ export function AccountEditor({
             </EditorSection>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-4">
             <EditorSection
               title="Authenticator"
               description="TOTP / HOTP generation"
               tone="violet"
+              icon={Timer}
               defaultOpen
             >
               <OtpPanel
@@ -404,6 +417,7 @@ export function AccountEditor({
               title="Notes"
               description="Free-form notes"
               tone="rose"
+              icon={StickyNote}
               defaultOpen={false}
             >
               <Textarea
