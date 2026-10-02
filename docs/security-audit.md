@@ -42,9 +42,9 @@ clearing), no password policy, and no browser security headers.
 | F2 | Critical | The Argon2 pepper is public; password is the only offline barrier | Open — Phase 4 |
 | F3 | High | No password policy; a typo silently creates a vault | Open — Phase 4 |
 | F4 | High | Rollback and substitution of vault blobs | Open — Phase 4 |
-| F5 | High | Master password kept for the whole session | Open — Phases 1, 4 |
-| F6 | High | No auto-lock, clipboard never cleared | Open — Phase 1 |
-| F7 | High | No CSP or security headers | Open — Phase 1 |
+| F5 | High | Master password kept for the whole session | Partly fixed (Phase 1: off the context value) — Phase 4 |
+| F6 | High | No auto-lock, clipboard never cleared | **Fixed** — Phase 1 |
+| F7 | High | No CSP or security headers | **Fixed** — Phase 1 |
 | F8 | Medium | Ciphertext cache never cleared | Open — Phase 4 |
 | F9 | Medium | Password change leaves old copies openable | Open — Phase 4 |
 | F10 | Medium | KDF parameters not agile; no Unicode normalization | Open — Phases 3, 4 |

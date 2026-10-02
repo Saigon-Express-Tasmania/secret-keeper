@@ -14,6 +14,7 @@ import {
 import type { OtpSettings } from "@/lib/account/schema"
 import { buildOtpauthUri } from "@/lib/otp/otpauth"
 import { encodeQrPng } from "@/lib/otp/qr"
+import { copySecretImage } from "@/lib/security/clipboard"
 
 type Rendered =
   | { uri: string; ok: true; blob: Blob; url: string }
@@ -89,9 +90,7 @@ export function OtpQrDialog({ open, onOpenChange, otp }: OtpQrDialogProps) {
       return
     }
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": current.blob }),
-      ])
+      await copySecretImage(current.blob)
       setCopyStatus({ kind: "copied" })
       window.setTimeout(
         () =>

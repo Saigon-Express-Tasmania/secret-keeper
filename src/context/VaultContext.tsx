@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,9 @@ import {
 
 import { decryptFileJson, encryptFileJson } from "@/lib/crypto/file"
 import type { EncryptedVaultBlob } from "@/lib/crypto/vault"
+import { readAutoLockMinutes } from "@/lib/prefs/autoLock"
+import { clearSecretClipboard } from "@/lib/security/clipboard"
+import { watchIdle } from "@/lib/security/idleLock"
 import { toVaultObjectKey } from "@/lib/storage"
 import type { JsonValue, VaultArchive } from "@/lib/vault/fs"
 import { getNode, putFile } from "@/lib/vault/fs"
@@ -19,15 +23,17 @@ import {
   mergeImportIntoArchive,
 } from "@/lib/vault/transfer"
 
+export type LockReason = "manual" | "idle" | "pagehide"
+
 type VaultContextValue = {
   unlocked: boolean
   payload: VaultArchive | null
-  /** In-memory only; cleared on lock. */
-  masterPassword: string | null
+  /** Why the vault was last locked (shown on the Gate); null before first unlock. */
+  lockReason: LockReason | null
   saving: boolean
   saveError: string | null
   unlock: (masterPassword: string, vaultName: string) => Promise<void>
-  lock: () => void
+  lock: (reason?: LockReason) => void
   /** Decrypt one file for viewing — result is not stored in context. */
   decryptFile: (path: string) => Promise<JsonValue>
   /**
@@ -67,10 +73,12 @@ const VaultContext = createContext<VaultContextValue | null>(null)
 
 export function VaultProvider({ children }: { children: ReactNode }) {
   const [payload, setPayload] = useState<VaultArchive | null>(null)
-  const [masterPassword, setMasterPassword] = useState<string | null>(null)
+  const [lockReason, setLockReason] = useState<LockReason | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  // Kept out of React state so the password is never on the context value.
+  const masterPasswordRef = useRef<string | null>(null)
   const fileDekKeyRef = useRef<CryptoKey | null>(null)
   const fileDekBytesRef = useRef<Uint8Array | null>(null)
   const objectKeyRef = useRef<string | null>(null)
@@ -81,20 +89,35 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     fileDekKeyRef.current = result.fileDekKey
     fileDekBytesRef.current = result.fileDekBytes
     objectKeyRef.current = objectKey
+    masterPasswordRef.current = password
     setPayload(result.payload)
-    setMasterPassword(password)
+    setLockReason(null)
     setSaveError(null)
   }, [])
 
-  const lock = useCallback(() => {
+  const lock = useCallback((reason: LockReason = "manual") => {
+    // Best effort: zero raw key bytes before dropping the references.
+    fileDekBytesRef.current?.fill(0)
     fileDekKeyRef.current = null
     fileDekBytesRef.current = null
     objectKeyRef.current = null
+    masterPasswordRef.current = null
+    clearSecretClipboard()
     setPayload(null)
-    setMasterPassword(null)
+    setLockReason(reason)
     setSaveError(null)
     setSaving(false)
   }, [])
+
+  const unlocked = payload !== null
+  useEffect(() => {
+    if (!unlocked) return
+    return watchIdle({
+      idleMs: readAutoLockMinutes() * 60_000,
+      onIdle: () => lock("idle"),
+      onPageHide: () => lock("pagehide"),
+    })
+  }, [unlocked, lock])
 
   const decryptFile = useCallback(async (path: string): Promise<JsonValue> => {
     const archive = payload
@@ -114,6 +137,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback(
     async (mutator: (archive: VaultArchive) => void | Promise<void>) => {
+      const masterPassword = masterPasswordRef.current
       if (
         !payload ||
         !masterPassword ||
@@ -145,7 +169,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setSaving(false)
       }
     },
-    [payload, masterPassword]
+    [payload]
   )
 
   const putEncryptedFile = useCallback(
@@ -166,6 +190,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const changeMasterPassword = useCallback(
     async (current: string, next: string) => {
+      const masterPassword = masterPasswordRef.current
       if (
         !payload ||
         !masterPassword ||
@@ -192,7 +217,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
           next,
           objectKeyRef.current
         )
-        setMasterPassword(next)
+        masterPasswordRef.current = next
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to change master password."
@@ -202,15 +227,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setSaving(false)
       }
     },
-    [payload, masterPassword]
+    [payload]
   )
 
   const exportEncryptedVault = useCallback(async (): Promise<EncryptedVaultBlob> => {
+    const masterPassword = masterPasswordRef.current
     if (!payload || !masterPassword || !fileDekBytesRef.current) {
       throw new Error("Vault is locked.")
     }
     return buildExportBlob(payload, fileDekBytesRef.current, masterPassword)
-  }, [payload, masterPassword])
+  }, [payload])
 
   const importEncryptedVault = useCallback(
     async (blob: EncryptedVaultBlob, password: string): Promise<string> => {
@@ -239,9 +265,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      unlocked: payload !== null,
+      unlocked,
       payload,
-      masterPassword,
+      lockReason,
       saving,
       saveError,
       unlock,
@@ -254,8 +280,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       importEncryptedVault,
     }),
     [
+      unlocked,
       payload,
-      masterPassword,
+      lockReason,
       saving,
       saveError,
       unlock,

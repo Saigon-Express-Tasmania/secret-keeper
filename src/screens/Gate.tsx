@@ -25,7 +25,7 @@ export function Gate() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const { unlock } = useVault()
+  const { unlock, lockReason } = useVault()
   const navigate = useNavigate()
 
   async function handleSubmit(event: FormEvent) {
@@ -92,6 +92,10 @@ export function Gate() {
             {error ? (
               <p className="text-sm text-destructive" role="alert">
                 {error}
+              </p>
+            ) : lockReason === "idle" ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                Locked after a period of inactivity.
               </p>
             ) : null}
           </CardContent>
