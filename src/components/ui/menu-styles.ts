@@ -1,10 +1,14 @@
 /**
  * Shared macOS menu class strings so context menus, dropdowns and the menu
  * bar all look the same (translucent panel, 22px rows, accent highlight).
+ *
+ * Menus deliberately have no exit animation: a fading-out menu stays mounted,
+ * and moving focus into the next menu-bar menu would count as "focus
+ * outside" for it and close the whole menu bar (macOS switches instantly).
  */
 
 export const menuContentClass =
-  "z-50 min-w-[13rem] overflow-x-hidden overflow-y-auto rounded-[7px] bg-mac-menu p-[5px] text-[13px] leading-none text-mac-label shadow-mac-popover backdrop-blur-2xl backdrop-saturate-150 outline-none select-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-75"
+  "z-50 min-w-[13rem] overflow-x-hidden overflow-y-auto rounded-[7px] bg-mac-menu p-[5px] text-[13px] leading-none text-mac-label shadow-mac-popover backdrop-blur-2xl backdrop-saturate-150 outline-none select-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-75"
 
 export const menuItemClass =
   "group relative flex h-[22px] cursor-default items-center gap-2 rounded-[4px] pr-2.5 pl-5 whitespace-nowrap outline-none data-highlighted:bg-mac-accent data-highlighted:text-white data-disabled:pointer-events-none data-disabled:opacity-35 data-[state=open]:bg-mac-accent data-[state=open]:text-white pointer-coarse:h-9 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0"

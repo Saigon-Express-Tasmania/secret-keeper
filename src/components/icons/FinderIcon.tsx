@@ -81,7 +81,7 @@ export function FinderIcon({ kind, glyphId, size, className }: FinderIconProps) 
             d="M15 5.5h23.5L50 17v39.5c0 1.1-.9 2-2 2H15c-1.1 0-2-.9-2-2v-49c0-1.1.9-2 2-2z"
             fill="var(--mac-doc-page)"
             stroke="var(--mac-doc-edge)"
-            strokeWidth="0.6"
+            strokeWidth={size <= 24 ? 2.4 : 0.6}
           />
           <path d="M38.5 5.5V15c0 1.1.9 2 2 2H50z" fill="var(--mac-doc-fold)" />
           {size >= 48 ? (

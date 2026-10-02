@@ -1,25 +1,27 @@
 import { Loader2 } from "lucide-react"
 
+import { AppIcon } from "@/components/mac/AppIcon"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 
 type UnsavedChangesDialogProps = {
   open: boolean
+  fileName: string
   busy?: boolean
-  onSave: () => Promise<void> | void
+  onSave: () => void
   onDiscard: () => void
   onCancel: () => void
 }
 
+/** macOS "Do you want to save the changes…" sheet. */
 export function UnsavedChangesDialog({
   open,
+  fileName,
   busy = false,
   onSave,
   onDiscard,
@@ -32,46 +34,31 @@ export function UnsavedChangesDialog({
         if (!next && !busy) onCancel()
       }}
     >
-      <DialogContent showCloseButton={!busy}>
-        <DialogHeader>
-          <DialogTitle>Unsaved changes</DialogTitle>
-          <DialogDescription>
-            This account has unsaved edits. Save before leaving, discard them,
-            or stay on this file.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="gap-2 sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={busy}
-          >
+      <DialogContent showCloseButton={false} className="gap-3 sm:max-w-[26rem]">
+        <div className="flex gap-4">
+          <AppIcon size={52} />
+          <div className="flex min-w-0 flex-col gap-1.5 pt-0.5">
+            <DialogTitle className="pr-0">
+              Do you want to save the changes you made to “{fileName}”?
+            </DialogTitle>
+            <DialogDescription>
+              Your changes will be lost if you don’t save them.
+            </DialogDescription>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-1">
+          <Button type="button" variant="outline" onClick={onDiscard} disabled={busy}>
+            Don’t Save
+          </Button>
+          <div className="flex-1" />
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onDiscard}
-            disabled={busy}
-          >
-            Discard
+          <Button type="button" onClick={onSave} disabled={busy} autoFocus>
+            {busy ? <Loader2 className="animate-spin" /> : null}
+            Save
           </Button>
-          <Button
-            type="button"
-            onClick={() => void onSave()}
-            disabled={busy}
-          >
-            {busy ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Save"
-            )}
-          </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )
