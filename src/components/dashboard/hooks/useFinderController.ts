@@ -19,6 +19,11 @@ import {
 import { useFinderMutations, type FinderMutations } from "@/components/dashboard/hooks/useFinderMutations"
 import { useFinderPrefs } from "@/components/dashboard/hooks/useFinderPrefs"
 import { useLeaveGuard, type LeaveGuard } from "@/components/dashboard/hooks/useLeaveGuard"
+import {
+  toFileRefs,
+  useListedAccounts,
+  type ListedAccountState,
+} from "@/components/dashboard/useListedAccounts"
 import { useVault } from "@/context/VaultContext"
 import { useWindowActive } from "@/hooks/useWindowActive"
 import { pathExists, untitledName } from "@/lib/finder/paths"
@@ -40,6 +45,7 @@ import {
   listRootDirs,
   parentPath,
   pathIsUnderAny,
+  type FsFile,
   type VaultArchive,
 } from "@/lib/vault/fs"
 import { exportFilename } from "@/lib/vault/transfer"
@@ -56,6 +62,8 @@ export type FinderController = {
   setPrefs: (patch: Partial<FinderPrefs>) => void
   showCredentials: boolean
   setShowCredentials: (on: boolean) => void
+  /** Decrypted account summaries for visible files (Show Credentials only). */
+  credentials: ReadonlyMap<string, ListedAccountState>
   mutations: FinderMutations
   busy: boolean
   saveError: string | null
@@ -166,6 +174,24 @@ export function useFinderController(archive: VaultArchive): FinderController {
     () => deriveFinderModel(archive, state, prefs, vaultName),
     [archive, state, prefs, vaultName]
   )
+
+  // Decrypt only what is on screen (or being previewed), and only when the
+  // user turned on Show Credentials. Trash items are never decrypted.
+  const visibleFiles = useMemo(() => {
+    if (!showCredentials || model.mode === "trash" || model.mode === "file") return []
+    const seen = new Set<string>()
+    const out: { path: string; node: FsFile }[] = []
+    const add = (key: string | null) => {
+      const item = key ? model.itemsByKey.get(key) : undefined
+      if (!item || item.source !== "vault" || item.node.type !== "file" || seen.has(item.path)) return
+      seen.add(item.path)
+      out.push({ path: item.path, node: item.node })
+    }
+    if (model.view !== "columns") for (const item of model.items) add(item.key)
+    add(state.selection.focus)
+    return toFileRefs(out)
+  }, [showCredentials, model, state.selection.focus])
+  const credentials = useListedAccounts(showCredentials, visibleFiles)
 
   // Async flows (await alert / save) must read the latest values.
   const latest = useRef({ archive, state, model })
@@ -524,6 +550,7 @@ export function useFinderController(archive: VaultArchive): FinderController {
     setPrefs,
     showCredentials,
     setShowCredentials,
+    credentials,
     mutations,
     busy,
     saveError: vault.saveError,

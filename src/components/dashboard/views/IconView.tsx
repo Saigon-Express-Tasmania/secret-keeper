@@ -87,6 +87,14 @@ function IconCell({
 
 export function IconView() {
   const c = useFinder()
+  /** Finder "item info": item count / size, or the username with credentials. */
+  const itemInfo = (item: FinderItem) => {
+    if (c.showCredentials && item.kind === "file" && item.source === "vault") {
+      const state = c.credentials.get(item.path)
+      if (state?.status === "ready" && state.account.username) return state.account.username
+    }
+    return infoText(item)
+  }
   const { contentRef } = c
   const width = useElementWidth(contentRef)
   const size = c.prefs.iconSize
@@ -135,7 +143,7 @@ export function IconView() {
                 selected={selection.keys.has(item.key)}
                 emphasized={emphasized}
                 dimmed={c.mutations.pendingKeys.has(item.key) || isCut(clipboard, item)}
-                info={c.prefs.showItemInfo ? infoText(item) : null}
+                info={c.prefs.showItemInfo ? itemInfo(item) : null}
                 rename={editing}
               />
             )

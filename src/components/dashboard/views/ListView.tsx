@@ -4,6 +4,7 @@ import type { KeyboardEvent } from "react"
 import { useFinder } from "@/components/dashboard/finderContext"
 import type { FinderController } from "@/components/dashboard/hooks/useFinderController"
 import { ItemsContextMenu } from "@/components/dashboard/views/ItemsContextMenu"
+import { credentialColumns } from "@/components/dashboard/views/credentialColumns"
 import { RenameField } from "@/components/dashboard/views/RenameField"
 import { fitColumns, NAME_MIN, type ListColumn } from "@/components/dashboard/views/listColumns"
 import {
@@ -99,12 +100,7 @@ function toggleExpanded(c: FinderController, item: FinderItem, all: boolean) {
   c.dispatch({ type: "setExpanded", paths, open })
 }
 
-export type ListViewProps = {
-  /** Extra leading columns (credentials) supplied by the caller. */
-  extraColumns?: ListColumn[]
-}
-
-export function ListView({ extraColumns = [] }: ListViewProps) {
+export function ListView() {
   const c = useFinder()
   const { contentRef } = c
   const width = useElementWidth(contentRef)
@@ -142,6 +138,10 @@ export function ListView({ extraColumns = [] }: ListViewProps) {
   }
 
   const { emphasized, surfaceProps } = useViewSurface({ onKey })
+  const extraColumns =
+    c.showCredentials && (mode === "folder" || mode === "search")
+      ? credentialColumns(c.credentials)
+      : []
   const columns = fitColumns(candidateColumns(c, extraColumns), width)
   const template = `minmax(${NAME_MIN}px, 1fr) ${columns.map((col) => `${col.width}px`).join(" ")}`
   const { selection, rename, phantom, clipboard } = c.state
@@ -219,7 +219,7 @@ export function ListView({ extraColumns = [] }: ListViewProps) {
                 aria-expanded={item.expandable ? !!item.expanded : undefined}
                 data-item-key={item.key}
                 className={cn(
-                  "mx-2.5 grid h-6 items-center rounded-[5px] text-[13px] select-none pointer-coarse:h-10",
+                  "group/row mx-2.5 grid h-6 items-center rounded-[5px] text-[13px] select-none pointer-coarse:h-10",
                   index % 2 === 1 && !selected && "bg-mac-row-alt",
                   selected && (emphasized ? "bg-mac-selection text-white" : "bg-mac-selection-inactive"),
                   selected && prevSel && "rounded-t-none",

@@ -8,6 +8,7 @@ import { useGlobalShortcuts } from "@/components/dashboard/hooks/useGlobalShortc
 import { IconPickerDialog } from "@/components/dashboard/IconPickerDialog"
 import { ImportVaultDialog } from "@/components/dashboard/ImportVaultDialog"
 import { KeyboardShortcutsDialog } from "@/components/dashboard/KeyboardShortcutsDialog"
+import { QuickLookPanel } from "@/components/dashboard/QuickLookPanel"
 import { UnsavedChangesDialog } from "@/components/dashboard/UnsavedChangesDialog"
 import { AppIcon } from "@/components/mac/AppIcon"
 import { Desktop } from "@/components/mac/Desktop"
@@ -50,6 +51,7 @@ export function FinderApp({ archive }: { archive: VaultArchive }) {
         </div>
       </Desktop>
 
+      <QuickLookPanel />
       <GetInfoDialog />
       <IconPickerDialog
         open={iconItem !== null}
