@@ -243,7 +243,9 @@ export function SecondFactorStep({
 }) {
   const [code, setCode] = useState("")
   const hasTotp = methods.includes("totp")
-  const hasEmail = methods.includes("email") && !!onEmailLink
+  // With TOTP on, a link does not replace the code; it can still replace the
+  // Secret Key (email unlock), which the Secret Key step offers.
+  const hasEmail = methods.includes("email") && !hasTotp && !!onEmailLink
 
   return (
     <div className="flex flex-col gap-4">
@@ -277,10 +279,14 @@ export function SecondFactorStep({
         </form>
       ) : null}
       {hasEmail ? (
-        <Button type="button" variant={hasTotp ? "outline" : "default"} disabled={busy} onClick={onEmailLink}>
-          <Mail />
-          {hasTotp ? "Also email me a link (skips the Secret Key)" : "Email me a sign-in link"}
-        </Button>
+        <>
+          <p className="text-sm text-muted-foreground">
+            We'll email a one-time link to the address on this vault. Open it on this device.
+          </p>
+          <Button type="button" disabled={busy} onClick={onEmailLink}>
+            {busy ? <BusyLabel label="Sending…" /> : <><Mail /> Email me a sign-in link</>}
+          </Button>
+        </>
       ) : null}
       <FormError message={error} />
       <div className="flex flex-wrap justify-between gap-2">
@@ -291,6 +297,75 @@ export function SecondFactorStep({
           Use Recovery Key
         </LinkButton>
       </div>
+    </div>
+  )
+}
+
+// --- Sign-in link (/verify) ---------------------------------------------------------
+
+export function VerifyForm({
+  vault,
+  busy,
+  progress,
+  error,
+  onSubmit,
+  onCancel,
+}: Busy & {
+  vault: string
+  onSubmit: (password: string, trustDevice: boolean) => void
+  onCancel: () => void
+}) {
+  const [password, setPassword] = useState("")
+  const [trust, setTrust] = useState(true)
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        onSubmit(password, trust)
+      }}
+    >
+      <input type="text" name="username" autoComplete="username" value={vault} readOnly hidden />
+      <p className="text-sm">
+        Vault <span className="font-medium">{vault}</span>. Enter your master password to finish
+        signing in on this device.
+      </p>
+      <Field
+        id="master-password"
+        label="Master password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        placeholder="••••••••"
+        autoFocus
+        disabled={busy}
+        required
+      />
+      <TrustDeviceCheckbox checked={trust} onChange={setTrust} disabled={busy} />
+      <FormError message={error} />
+      <Button type="submit" className="w-full" disabled={busy}>
+        {busy ? <BusyLabel label="Unlocking…" progress={progress} /> : "Unlock"}
+      </Button>
+      <div>
+        <LinkButton onClick={onCancel} disabled={busy}>
+          Cancel
+        </LinkButton>
+      </div>
+    </form>
+  )
+}
+
+export function BrokenLinkStep({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="flex flex-col gap-4 text-sm">
+      <p>
+        This sign-in link is incomplete or was already opened. Links work once, for 15
+        minutes. Request a new one from the unlock screen.
+      </p>
+      <Button type="button" onClick={onBack}>
+        Go to unlock
+      </Button>
     </div>
   )
 }
@@ -309,7 +384,13 @@ export function EmailSentStep({ to, onBack }: { to: string; onBack: () => void }
         device you want to unlock (it works once, for 15 minutes) and enter your master
         password there.
       </p>
-      <LinkButton onClick={onBack}>Back</LinkButton>
+      <p className="text-muted-foreground">
+        You can close this page. No email? Check spam, or go back and try again in a few
+        minutes.
+      </p>
+      <div>
+        <LinkButton onClick={onBack}>Back</LinkButton>
+      </div>
     </div>
   )
 }

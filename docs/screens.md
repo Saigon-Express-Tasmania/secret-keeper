@@ -1,10 +1,11 @@
 # Screens
 
-The app has exactly two routes.
+The app has three routes.
 
 | Route | Screen | Purpose |
 | --- | --- | --- |
 | `/` | Gate | Unlock, create a vault, or recover with the Recovery Key |
+| `/verify` | Gate (sign-in link) | Finish an emailed sign-in link: `/verify#v=<vault>&t=<token>` |
 | `/dashboard` | Dashboard | Browse / create folders and files in the unlocked vault |
 
 Unknown paths redirect to `/`.
@@ -29,7 +30,23 @@ locked with a wait time, invalid code, network).
 6. Hand the session to `VaultContext` → Dashboard
 
 **Second factor** — TOTP code from an authenticator app, "Email me a sign-in
-link" (when email is set up), or "Use Recovery Key". Shown only off-device.
+link" (when the vault has a confirmed address and no authenticator app), or
+"Use Recovery Key". Shown only off-device. With an authenticator app the code
+is always required; a link cannot replace it.
+
+**Check your email** — after "Email me a sign-in link": the masked address,
+"works once, for 15 minutes", open it on the device to unlock.
+
+**Finish signing in** (`/verify`) — the page reads the vault name and token
+from the URL fragment, then removes them from the address bar and history.
+It asks for the master password (and the authenticator code when on, as a
+second-factor step) with "Trust this device" ticked by default. With email
+unlock the vault opens without the Secret Key and a trusted device keeps it
+from then on; otherwise the Secret Key step follows. A used or expired link
+shows "This sign-in link is incomplete or was already opened".
+
+The **Secret Key** step also offers "Email me a link instead" when the vault
+has email unlock.
 
 **Create a vault** — name (`a-z 0-9 -`), master password twice (≥ 12
 characters, not the vault name), the server's setup code, trust checkbox. The
@@ -85,6 +102,7 @@ Tools → Security…. Every change asks for the master password again (step-up)
 | --- | --- |
 | Master password | Change it: re-wraps the slots, rotates the server shares (old copies stop opening), ends other sessions, optionally signs out trusted devices |
 | Two-step verification | **Set up authenticator app**: QR code + key to type, code from the app, master password, "Trust this device" (other devices lose trust). **Turn off**: current code + master password, or the Recovery Key alone |
+| Email | **Add / Change**: address + master password, then the 6-digit code mailed to it (the old address keeps working until then and is told about the change). **Remove** (only with email unlock off). **Email unlock** on/off: re-keys the vault to add or drop the email slot |
 | Emergency Kit | Show Secret Key (password checked by the server); New Secret Key; New Recovery Key (each shows the new kit once) |
 | This device | Whether it remembers the Secret Key and skips the second factor (and until when); Forget this device |
 | Trusted devices | Every trusted device (label, trusted since, until), "this device" marked; Revoke one; Revoke all |

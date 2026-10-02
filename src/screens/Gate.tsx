@@ -8,13 +8,16 @@ import {
   AppBackdrop,
 } from "@/components/AppBackdrop"
 import {
+  BrokenLinkStep,
   CreateForm,
+  EmailSentStep,
   RecoverForm,
   RecoveryRekeyStep,
   RollbackStep,
   SecondFactorStep,
   SecretKeyStep,
   UnlockForm,
+  VerifyForm,
   type CreateInput,
   type RecoveryRekeyInput,
 } from "@/components/gate/GateSteps"
@@ -32,12 +35,14 @@ import { parseKey } from "@/lib/crypto/keys"
 import { deviceLabel } from "@/lib/device/label"
 import { sessionDeps } from "@/lib/vault/deps"
 import { describeError } from "@/lib/vault/errors"
+import type { SignInLink } from "@/lib/vault/signInLink"
 import {
   createVault,
   NeedSecretKeyError,
   openDownloadedVault,
   preparePasswordUnlock,
   prepareRecoveryUnlock,
+  requestEmailLink,
   requestUnlock,
   RollbackError,
   wipePending,
@@ -50,11 +55,12 @@ import {
 } from "@/lib/vault/vaultSession"
 import type { SecondFactorMethod } from "@/shared/api"
 
-type Mode = "unlock" | "create" | "recover"
+type Mode = "unlock" | "create" | "recover" | "verify"
 
 type Step =
   | { kind: "form" }
   | { kind: "secondFactor"; methods: SecondFactorMethod[] }
+  | { kind: "emailSent"; to: string }
   | { kind: "secretKey"; downloaded: DownloadedVault; reason: "missing" | "wrong" }
   | { kind: "rollback"; downloaded: DownloadedVault; message: string; options: OpenOptions }
   | { kind: "recoveryRekey"; session: VaultSession; recoveryKey: Uint8Array }
@@ -65,16 +71,23 @@ const LOCK_NOTICES: Record<string, string> = {
   expired: "Your session ended. Unlock again.",
 }
 
-export function Gate() {
+/**
+ * Unlock, create and recover; with `signInLink` (the /verify page) it
+ * finishes an emailed sign-in link instead. `undefined` = normal Gate,
+ * `null` = /verify without a usable link.
+ */
+export function Gate({ signInLink }: { signInLink?: SignInLink | null }) {
   const { attach, lockReason } = useVault()
   const navigate = useNavigate()
-  const [mode, setMode] = useState<Mode>("unlock")
+  const [mode, setMode] = useState<Mode>(signInLink === undefined ? "unlock" : "verify")
   const [step, setStep] = useState<Step>({ kind: "form" })
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pendingRef = useRef<PendingUnlock | null>(null)
   const trustRef = useRef(false)
+  // Sent with every unlock attempt on /verify; the server uses it up on success.
+  const emailTokenRef = useRef<string | null>(signInLink?.token ?? null)
 
   // Never leave derived keys behind if the Gate unmounts mid-flow.
   useEffect(() => () => wipePending(pendingRef.current), [])
@@ -82,6 +95,12 @@ export function Gate() {
   function resetTo(next: Mode) {
     wipePending(pendingRef.current)
     pendingRef.current = null
+    if (mode === "verify") {
+      // Leave /verify; the link stays unused.
+      emailTokenRef.current = null
+      navigate("/", { replace: true })
+      return
+    }
     setMode(next)
     setStep({ kind: "form" })
     setError(null)
@@ -104,8 +123,9 @@ export function Gate() {
   function finish(session: VaultSession) {
     wipePending(pendingRef.current)
     pendingRef.current = null
+    emailTokenRef.current = null
     attach(session)
-    navigate("/dashboard")
+    navigate("/dashboard", { replace: true })
   }
 
   async function open(downloaded: DownloadedVault, options: OpenOptions = {}) {
@@ -134,6 +154,7 @@ export function Gate() {
     try {
       const downloaded = await requestUnlock(sessionDeps, pending, {
         ...options,
+        ...(emailTokenRef.current ? { emailToken: emailTokenRef.current } : {}),
         deviceLabel: deviceLabel(),
       })
       await open(downloaded)
@@ -153,6 +174,26 @@ export function Gate() {
       const pending = await preparePasswordUnlock(sessionDeps, vault, password, setProgress)
       pendingRef.current = pending
       await attempt(pending, { trustDevice: trust })
+    })
+
+  const onVerify = (password: string, trust: boolean) =>
+    run(async () => {
+      if (!signInLink) return
+      trustRef.current = trust
+      wipePending(pendingRef.current)
+      const pending = await preparePasswordUnlock(sessionDeps, signInLink.vault, password, setProgress)
+      pendingRef.current = pending
+      await attempt(pending, { trustDevice: trust })
+    })
+
+  const onEmailLink = () =>
+    run(async () => {
+      if (!pendingRef.current) return resetTo("unlock")
+      const sent = await requestEmailLink(sessionDeps, pendingRef.current)
+      // The link is finished on /verify (maybe another device); drop these keys.
+      wipePending(pendingRef.current)
+      pendingRef.current = null
+      setStep({ kind: "emailSent", to: sent.to })
     })
 
   const onTotp = (code: string) =>
@@ -213,7 +254,20 @@ export function Gate() {
 
   switch (step.kind) {
     case "form":
-      if (mode === "create") {
+      if (mode === "verify") {
+        title = "Finish signing in"
+        description = "You opened a sign-in link from your email."
+        body = signInLink ? (
+          <VerifyForm
+            {...busyProps}
+            vault={signInLink.vault}
+            onSubmit={onVerify}
+            onCancel={() => resetTo("unlock")}
+          />
+        ) : (
+          <BrokenLinkStep onBack={() => resetTo("unlock")} />
+        )
+      } else if (mode === "create") {
         title = "Create a vault"
         description = "Your vault is encrypted in this browser before it is stored."
         body = <CreateForm {...busyProps} onSubmit={onCreate} onBack={() => resetTo("unlock")} />
@@ -240,10 +294,15 @@ export function Gate() {
           {...busyProps}
           methods={step.methods}
           onTotp={onTotp}
+          onEmailLink={mode === "unlock" ? onEmailLink : undefined}
           onRecover={() => resetTo("recover")}
           onBack={() => resetTo("unlock")}
         />
       )
+      break
+    case "emailSent":
+      description = "Almost there."
+      body = <EmailSentStep to={step.to} onBack={() => resetTo("unlock")} />
       break
     case "secretKey":
       description = "One more key for this device."
@@ -252,6 +311,9 @@ export function Gate() {
           {...busyProps}
           reason={step.reason}
           onSubmit={onSecretKey}
+          onEmailLink={
+            mode === "unlock" && step.downloaded.meta.account.emailUnlock ? onEmailLink : undefined
+          }
           onRecover={() => resetTo("recover")}
           onBack={() => resetTo("unlock")}
         />

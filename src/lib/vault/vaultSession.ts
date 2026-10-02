@@ -55,6 +55,7 @@ import type {
   AccountRequest,
   AccountStatus,
   AccountSummary,
+  EmailLinkResponse,
   RekeyRequest,
   UnlockResponse,
 } from "@/shared/api"
@@ -195,6 +196,18 @@ export async function requestUnlock(
   const parsed = parseCkv3(blob)
   if (parsed.header.purpose !== "vault") throw new Error("The server returned a non-vault file.")
   return { pending, meta, parsed, trustDevice: options.trustDevice }
+}
+
+/**
+ * Mail a one-time sign-in link to the vault's confirmed address. Needs the
+ * password proof from a pending password unlock.
+ */
+export async function requestEmailLink(
+  deps: SessionDeps,
+  pending: PendingUnlock
+): Promise<EmailLinkResponse> {
+  if (pending.mode !== "password") throw new Error("A sign-in link needs the master password.")
+  return deps.api.emailLink({ vault: pending.vault, authKey: toBase64Url(pending.keys.authKey) })
 }
 
 // --- Step 3: open slots → VaultSession --------------------------------------------

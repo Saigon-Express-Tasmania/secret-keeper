@@ -27,6 +27,7 @@ import {
   readCookie,
   serializeCookie,
 } from "../cookies"
+import { LINK_TOKEN_BYTES } from "../email"
 import {
   badRequest,
   frameResponse,
@@ -45,7 +46,6 @@ import { hashLinkToken, maskEmail, verifyTotp } from "../twoFactor"
 import { loadAuthRecord, vaultNameFrom } from "./common"
 
 export const MAX_DEVICES = 10
-const LINK_TOKEN_BYTES = 32
 const INVALID = "Invalid vault name or credentials."
 
 type Failure = "bad_credentials" | "bad_second_factor"

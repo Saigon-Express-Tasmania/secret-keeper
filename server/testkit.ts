@@ -46,7 +46,9 @@ export type TestServer = {
 }
 
 export async function createTestServer(
-  overrides: Partial<ServerConfig> = {}
+  overrides: Partial<ServerConfig> = {},
+  /** Replace the capturing mailer (null = mail not configured). */
+  options: { mailer?: Mailer | null } = {}
 ): Promise<TestServer> {
   const config = testConfig(overrides)
   const keys = await deriveServerKeys(config.serverSecret)
@@ -58,7 +60,7 @@ export async function createTestServer(
     store,
     keys,
     config,
-    mailer,
+    mailer: options.mailer === undefined ? mailer : options.mailer,
     now: () => clock.now,
     log: (message) => logs.push(message),
   })

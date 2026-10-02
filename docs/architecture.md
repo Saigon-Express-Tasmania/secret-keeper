@@ -9,7 +9,7 @@ model and [security-audit.md](./security-audit.md) for why it is built this way.
 ## Goals
 
 - Manage personal secrets: logins, auth keys, wallets, notes, TOTP seeds
-- Two screens: Gate (unlock / create / recover) and Dashboard
+- Two screens: Gate (unlock / create / recover / sign-in link) and Dashboard
 - Static hosting on Netlify plus a single Function; R2 as the only datastore
 - Free tiers only: no database, no polling, no server-side key stretching
 
@@ -19,8 +19,10 @@ model and [security-audit.md](./security-audit.md) for why it is built this way.
 Gate: name + password
   │  POST /prelogin → KDF params (fake but stable for unknown names)
   │  Argon2id in the browser → authKey (to server) + pwKey (stays here)
-  │  POST /unlock {authKey [, TOTP | email token]} → session + server share P + blob
+  │  POST /unlock {authKey [, TOTP] [, email token]} → session + server share P + blob
   │      (second factor asked on untrusted devices; lockout after repeated failures)
+  │      a valid email token also releases share E (email unlock)
+  │  POST /email-link {authKey} → one-time link mailed to the confirmed address
   ▼
 open CKV3 blob locally:
   primary slot = pwKey ‖ Secret Key ‖ P [‖ passkey key]   (or email slot / recovery slot)
@@ -36,7 +38,7 @@ Lock (manual, idle, pagehide, session end) → keys wiped from memory
 
 | Piece | Role |
 | --- | --- |
-| `src/screens/Gate.tsx` + `src/components/gate/*` | Unlock / create / recovery state machine, Emergency Kit |
+| `src/screens/Gate.tsx` + `src/components/gate/*` | Unlock / create / recovery / sign-in link (`/verify`) state machine, Emergency Kit |
 | `src/screens/Dashboard.tsx` | Explorer, editor, Tools menu, Security dialog |
 | `src/context/VaultContext.tsx` | React wrapper around one `VaultSession`; idle lock |
 | `src/lib/vault/vaultSession.ts` | Client protocol: create, unlock steps, save with conflict replay, re-key, export/import |

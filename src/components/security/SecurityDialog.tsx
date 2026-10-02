@@ -1,7 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { KeyRound, Laptop, LifeBuoy, MonitorSmartphone, ShieldCheck, Smartphone, Timer } from "lucide-react"
+import {
+  KeyRound,
+  Laptop,
+  LifeBuoy,
+  Mail,
+  MonitorSmartphone,
+  ShieldCheck,
+  Smartphone,
+  Timer,
+} from "lucide-react"
 
 import { ChangeMasterPasswordDialog } from "@/components/dashboard/ChangeMasterPasswordDialog"
+import { EmailDialog } from "@/components/security/EmailDialog"
 import { EmergencyKitView } from "@/components/security/EmergencyKitView"
 import { StepUpDialog } from "@/components/security/StepUpDialog"
 import { TotpDisableDialog } from "@/components/security/TotpDisableDialog"
@@ -25,7 +35,7 @@ import {
 } from "@/lib/prefs/autoLock"
 import { describeError } from "@/lib/vault/errors"
 import { recoveryProof, type EmergencyKit } from "@/lib/vault/vaultSession"
-import type { DeviceInfo } from "@/shared/api"
+import type { AccountStatus, DeviceInfo } from "@/shared/api"
 import { wipe } from "@/shared/bytes"
 
 type SecurityDialogProps = {
@@ -78,8 +88,9 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
   const [changePassword, setChangePassword] = useState(false)
   const [totpSetup, setTotpSetup] = useState(false)
   const [totpDisable, setTotpDisable] = useState(false)
-  const [devices, setDevices] = useState<DeviceInfo[] | null>(null)
-  const [devicesError, setDevicesError] = useState<string | null>(null)
+  const [emailDialog, setEmailDialog] = useState(false)
+  const [status, setStatus] = useState<AccountStatus | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [autoLock, setAutoLock] = useState(readAutoLockMinutes)
 
   // The server is the source of truth for factors and trusted devices.
@@ -87,13 +98,13 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
     if (!open) return
     let cancelled = false
     accountRequest({ op: "status" }).then(
-      (status) => {
+      (next) => {
         if (cancelled) return
-        setDevices(status.devices)
-        setDevicesError(null)
+        setStatus(next)
+        setStatusError(null)
       },
       (error: unknown) => {
-        if (!cancelled) setDevicesError(describeError(error))
+        if (!cancelled) setStatusError(describeError(error))
       }
     )
     return () => {
@@ -102,6 +113,9 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
   }, [open, accountRequest])
 
   if (!vault) return null
+  const devices = status?.devices ?? null
+  const setDevices = (update: (list: DeviceInfo[]) => DeviceInfo[]) =>
+    setStatus((current) => (current ? { ...current, devices: update(current.devices) } : current))
 
   const serverTrustedUntil = vault.device.exp ? day(vault.device.exp) : null
   const localRecord = loadDevice(vault.name)
@@ -138,6 +152,30 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
     })
   }
 
+  function setEmailUnlock(on: boolean) {
+    setStepUp({
+      title: on ? "Turn on email unlock" : "Turn off email unlock",
+      description: on
+        ? "A sign-in link plus your master password will open the vault on a new device without the Secret Key. Your other open sessions are signed out."
+        : "New devices will need the Secret Key again. Your other open sessions are signed out.",
+      confirmLabel: on ? "Turn on" : "Turn off",
+      run: async (password) => {
+        await rekey({ proof: { password }, emailUnlock: on })
+      },
+    })
+  }
+
+  function removeEmail() {
+    setStepUp({
+      title: "Remove email address",
+      description: "No more sign-in links or security alerts. A notice goes to the old address.",
+      confirmLabel: "Remove",
+      run: async (password) => {
+        setStatus(await accountRequest({ op: "email.remove", proof: await passwordProof(password) }))
+      },
+    })
+  }
+
   function revoke(device: DeviceInfo | "all") {
     setStepUp({
       title: device === "all" ? "Revoke all trusted devices" : `Revoke “${device.label}”`,
@@ -147,12 +185,13 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
           : "That device will need a second factor at its next unlock.",
       confirmLabel: "Revoke",
       run: async (password) => {
-        const status = await accountRequest({
-          op: "devices.revoke",
-          proof: await passwordProof(password),
-          id: device === "all" ? "all" : device.id,
-        })
-        setDevices(status.devices)
+        setStatus(
+          await accountRequest({
+            op: "devices.revoke",
+            proof: await passwordProof(password),
+            id: device === "all" ? "all" : device.id,
+          })
+        )
       },
     })
   }
@@ -209,6 +248,61 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                 )}
               </Section>
 
+              <Section icon={<Mail className="size-4" />} title="Email">
+                {vault.account.email ? (
+                  <p className="text-muted-foreground">
+                    Sign-in links and security alerts go to{" "}
+                    <span className="font-medium text-foreground">{vault.account.email}</span>.
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground">
+                    Add an address for sign-in links on new devices and for alerts (Recovery
+                    Key used, new trusted device, password changed).
+                  </p>
+                )}
+                {status?.pendingEmail ? (
+                  <p className="text-muted-foreground">
+                    Waiting for the code sent to {status.pendingEmail}.
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setEmailDialog(true)}>
+                    {status?.pendingEmail ? "Enter code" : vault.account.email ? "Change" : "Add email"}
+                  </Button>
+                  {vault.account.email ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={vault.account.emailUnlock}
+                      title={vault.account.emailUnlock ? "Turn off email unlock first" : undefined}
+                      onClick={removeEmail}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+                {vault.account.email || vault.account.emailUnlock ? (
+                  <div className="space-y-2 border-t pt-2">
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        Email unlock {vault.account.emailUnlock ? "on" : "off"}.
+                      </span>{" "}
+                      {vault.account.emailUnlock
+                        ? "On a new device, a sign-in link plus your master password replaces the Secret Key (your authenticator code is still needed when it's on). Someone who gets into your email and knows your password could open the vault."
+                        : "Lets a sign-in link replace the Secret Key on a new device, so you can sign in without your Emergency Kit."}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={saving || (!vault.account.emailUnlock && !vault.account.email)}
+                      onClick={() => setEmailUnlock(!vault.account.emailUnlock)}
+                    >
+                      {vault.account.emailUnlock ? "Turn off email unlock" : "Turn on email unlock"}
+                    </Button>
+                  </div>
+                ) : null}
+              </Section>
+
               <Section icon={<LifeBuoy className="size-4" />} title="Emergency Kit">
                 <p className="text-muted-foreground">
                   Secret Key: needed on new devices. Recovery Key: opens the vault if you
@@ -246,7 +340,7 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                   disabled={!rememberedUntil && !serverTrustedUntil}
                   onClick={() =>
                     void forgetThisDevice().then(() =>
-                      setDevices((list) => list?.filter((device) => !device.current) ?? null)
+                      setDevices((list) => list.filter((device) => !device.current))
                     )
                   }
                 >
@@ -259,8 +353,8 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
                   Trusted devices skip the second factor for 30 days. A revoked device may
                   still remember your Secret Key until you issue a new one.
                 </p>
-                {devicesError ? (
-                  <p className="text-destructive">{devicesError}</p>
+                {statusError ? (
+                  <p className="text-destructive">{statusError}</p>
                 ) : devices === null ? (
                   <p className="text-muted-foreground">Loading…</p>
                 ) : devices.length === 0 ? (
@@ -344,7 +438,7 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
         vaultName={vault.name}
         onSubmit={async (current, next, revokeDevices) => {
           await rekey({ proof: { password: current }, newPassword: next, revokeDevices })
-          if (revokeDevices) setDevices([])
+          if (revokeDevices) setDevices(() => [])
         }}
       />
 
@@ -353,15 +447,16 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
         onOpenChange={setTotpSetup}
         vaultName={vault.name}
         onEnable={async ({ secret, code, password, trust }) => {
-          const status = await accountRequest({
-            op: "totp.enable",
-            proof: await passwordProof(password),
-            secret,
-            code,
-            trustDevice: trust,
-            deviceLabel: deviceLabel(),
-          })
-          setDevices(status.devices)
+          setStatus(
+            await accountRequest({
+              op: "totp.enable",
+              proof: await passwordProof(password),
+              secret,
+              code,
+              trustDevice: trust,
+              deviceLabel: deviceLabel(),
+            })
+          )
         }}
       />
 
@@ -377,12 +472,31 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
             proof = recoveryProof(recoveryKey)
             wipe(recoveryKey)
           }
-          const status = await accountRequest({
-            op: "totp.disable",
-            proof,
-            ...(input.kind === "code" ? { code: input.code } : {}),
+          setStatus(
+            await accountRequest({
+              op: "totp.disable",
+              proof,
+              ...(input.kind === "code" ? { code: input.code } : {}),
+            })
+          )
+        }}
+      />
+
+      <EmailDialog
+        open={emailDialog}
+        onOpenChange={setEmailDialog}
+        pending={status?.pendingEmail ?? null}
+        onSend={async (email, password) => {
+          const next = await accountRequest({
+            op: "email.set",
+            proof: await passwordProof(password),
+            email,
           })
-          setDevices(status.devices)
+          setStatus(next)
+          return next.pendingEmail ?? email
+        }}
+        onConfirm={async (code) => {
+          setStatus(await accountRequest({ op: "email.confirm", code }))
         }}
       />
     </>

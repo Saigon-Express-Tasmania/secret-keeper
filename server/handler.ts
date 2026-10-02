@@ -10,6 +10,7 @@ import { account } from "./routes/account"
 import { getBlob, putBlob } from "./routes/blob"
 import { create } from "./routes/create"
 import { forgetDevice } from "./routes/device"
+import { emailLink } from "./routes/emailLink"
 import { prelogin } from "./routes/prelogin"
 import { unlock } from "./routes/unlock"
 
@@ -26,6 +27,7 @@ const ROUTES: Routes = {
   create: { POST: create },
   blob: { GET: getBlob, PUT: putBlob },
   account: { POST: account },
+  "email-link": { POST: emailLink },
   "device/forget": { POST: forgetDevice },
 }
 

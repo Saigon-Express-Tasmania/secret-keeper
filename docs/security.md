@@ -11,7 +11,8 @@ shaped this design are in [security-audit.md](./security-audit.md).
 | --- | --- | --- |
 | Anyone on the internet | The public JS bundle; can call the API | No secrets in the bundle; API needs a password proof, a second factor off-device, and is rate-limited and locked out after repeated failures |
 | Storage leak (R2 bucket, backups) | Every object and its metadata | Every blob needs the Secret Key (or the email share, sealed with a key R2 never sees) besides the password; verifiers are keyed HMACs |
-| Someone who learned the master password | The password | Also needs the Secret Key (or the email link), plus TOTP when enabled |
+| Someone who learned the master password | The password | Also needs the Secret Key (or, with email unlock, the mailbox), plus TOTP when enabled |
+| Someone who controls the mailbox | Sign-in links | Still needs the password; with email unlock off also the Secret Key; plus TOTP when enabled |
 | Thief of a trusted device / browser profile | Secret Key + device cookie | Still needs the password; guesses are online only (P is server-held), and the device is revoked after 5 failures |
 | Passer-by at an unlocked session | The open tab | Idle auto-lock, lock on `pagehide`, clipboard auto-clear, password re-entry for every security change |
 | Whoever controls the Netlify site | The code users run | Out of scope: a web-delivered vault trusts the code it is served |
@@ -25,11 +26,12 @@ shaped this design are in [security-audit.md](./security-audit.md).
 | Server share P | Cryptographic, held by the server | Every password unlock — makes offline guessing impossible |
 | Recovery Key `RK1-…` | Cryptographic, 256-bit | Break-glass alternative to all of the above |
 | Authenticator app (TOTP) | Access control, server-enforced | Every unlock on a device that is not trusted, once enabled |
+| Email sign-in link | Access control (one-time token) | Second factor on untrusted devices when an address is confirmed and TOTP is off |
+| Email unlock (server share E) | Cryptographic, held by the server | Optional: link + password replace the Secret Key on a new device |
 | Trusted device (30 days) | Access control (cookie) + local Secret Key | Skips the second factor; expires after a fixed 30 days |
 | Lockout | Access control | Failures 1–5 free, then `min(2^(n-6) min, 4 h)` |
 
-Additional gates (email sign-in link, passkey) are described below as they
-are enabled.
+The passkey gate is described below once enabled.
 
 ### Authenticator app (TOTP)
 
@@ -47,6 +49,33 @@ are enabled.
 - **Turning it off** needs the master password and a current code, or the
   Recovery Key alone (lost phone). Without either, the Recovery Key unlock is
   the way back in; it does not ask for a code.
+
+### Email
+
+- **Address.** Set with the master password and confirmed with a 6-digit code
+  mailed to it (15 minutes, 5 tries; stored as an HMAC). The old address keeps
+  working until then and is told about the change. The address is sealed in
+  `meta/{name}.json`; the vault file never contains it.
+- **Sign-in links.** `POST /email-link` needs the master password proof, so a
+  link email always means someone knows the password; it says so. The 256-bit
+  token is stored as a SHA-256 hash, expires after 15 minutes, at most 3 are
+  outstanding, and it is used up only inside a successful `/unlock` that also
+  carries the password (and the TOTP code when on). Opening the link, or a mail
+  scanner fetching it, consumes nothing. The token travels in the URL
+  fragment, which browsers never send to servers, and `/verify` removes it
+  from the address bar and history.
+- **Email unlock.** Optional re-key that adds an email slot: KEK =
+  HKDF(pwKey ‖ E). The server releases E only after a valid link, so a new
+  device opens with password + link instead of the Secret Key. It is weaker
+  than the Secret Key: whoever controls the mailbox and knows the password
+  gets in (plus the TOTP code when on). Leave it off for maximum security;
+  the address can only be removed while it is off.
+- **Limits.** 3 emails per 15 minutes and 10 per day per vault (links and
+  codes), on top of the per-IP edge limit. A link request with a wrong
+  password counts toward the lockout; a right one does not reset it.
+- **Notices** go to the confirmed address: Recovery Key used, new trusted
+  device, keys or password changed, authenticator app removed, address
+  changed or removed (to the old address).
 
 ### Trusted devices
 
@@ -140,5 +169,9 @@ See [data-model.md](./data-model.md) for byte layouts.
   re-key) still open with the previous Recovery Key.
 - **Clipboard history.** OS clipboard history or sync may keep copies.
 - **Timing.** Response latency may hint whether a vault name exists.
+- **Email unlock + server compromise.** Someone holding both the server
+  secret and the bucket can release E themselves; the email slot is then
+  only as strong as the master password. Leave email unlock off if that
+  matters to you.
 - **Old copies.** Blobs from before the migration were readable by anyone with
   the bundle; if the old password was weak, rotate the credentials inside.

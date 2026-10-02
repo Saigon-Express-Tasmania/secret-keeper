@@ -20,7 +20,7 @@ npm run expand-icons # regenerate icon JSON catalogs in src/lib/icons
 
 ## Architecture
 
-Static React 19 + Vite + Tailwind 4 + shadcn/ui SPA plus one Netlify Function (`netlify/functions/vault.mts` → `server/`). The browser does all encryption; the Function stores ciphertext on R2 and enforces access. Two routes: Gate (`/`, `src/screens/Gate.tsx`: unlock / create / recovery steps) and Dashboard (`/dashboard`).
+Static React 19 + Vite + Tailwind 4 + shadcn/ui SPA plus one Netlify Function (`netlify/functions/vault.mts` → `server/`). The browser does all encryption; the Function stores ciphertext on R2 and enforces access. Routes: Gate (`/`, `src/screens/Gate.tsx`: unlock / create / recovery steps; also `/verify` for emailed sign-in links) and Dashboard (`/dashboard`).
 
 Unlock (`src/lib/vault/vaultSession.ts`): `POST /api/vault/prelogin` (KDF params) → Argon2id in the browser → authKey to `POST /unlock` (second factor off trusted devices, lockout) → server returns a session, server share P and the CKV3 blob → open the primary slot (pwKey ‖ Secret Key ‖ P [‖ passkey key]) or email/recovery slot → vault key → body (CKZ1 archive) → per-file AES-GCM under the file DEK.
 
