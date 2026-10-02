@@ -23,6 +23,7 @@ import {
   type FsNode,
   type RawVaultArchive,
   type VaultArchive,
+  type VaultKeysSection,
 } from "@/lib/vault/fs"
 
 export type PreparedVault = {
@@ -32,6 +33,8 @@ export type PreparedVault = {
   fileDekBytes: Uint8Array
   /** Non-extractable CryptoKey for decrypt-on-open / encrypt-on-create. */
   fileDekKey: CryptoKey
+  /** Vault keys carried in the body (CKV3); null for legacy archives. */
+  keys: VaultKeysSection | null
   /** True when plaintext v2 files were encrypted or DEK was generated. */
   migrated: boolean
 }
@@ -178,6 +181,7 @@ export async function prepareSessionArchive(
       payload,
       fileDekBytes,
       fileDekKey,
+      keys: raw.keys ? structuredClone(raw.keys) : null,
       migrated: metaPatched,
     }
   }
@@ -197,6 +201,7 @@ export async function prepareSessionArchive(
     payload: stripFileDek(payload),
     fileDekBytes,
     fileDekKey,
+    keys: raw.keys ? structuredClone(raw.keys) : null,
     migrated: true,
   }
 }
@@ -209,18 +214,22 @@ export async function prepareEmptyVault(): Promise<PreparedVault> {
     payload: createEmptyArchive(),
     fileDekBytes,
     fileDekKey,
+    keys: null,
     migrated: true,
   }
 }
 
-/** Pack-ready archive including fileDek for outer encrypt. */
+/** Pack-ready archive including fileDek (and vault keys) for outer encrypt. */
 export function archiveForSave(
   payload: VaultArchive,
-  fileDekBytes: Uint8Array
+  fileDekBytes: Uint8Array,
+  keys?: VaultKeysSection | null
 ): VaultArchive {
+  const { keys: _ignored, ...rest } = structuredClone(payload)
   return {
-    ...structuredClone(payload),
+    ...rest,
     version: 3,
     fileDek: bytesToBase64(fileDekBytes),
+    ...(keys ? { keys: structuredClone(keys) } : {}),
   }
 }

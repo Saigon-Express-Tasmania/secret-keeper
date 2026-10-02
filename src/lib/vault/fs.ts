@@ -48,11 +48,27 @@ export type RecycleBinEntry = {
   node: FsNode
 }
 
+/**
+ * Key material that travels inside the encrypted vault body (CKV3) so any
+ * successful unlock can re-provision a device or re-wrap slots.
+ * Stripped from the React payload, like fileDek.
+ */
+export type VaultKeysSection = {
+  /** Secret Key, base64url (16 bytes). */
+  sk: string
+  /** Passkey key KP, base64url (32 bytes); present once a passkey exists. */
+  kp?: string
+  /** Display names for enrolled passkeys, keyed by credential id. */
+  passkeys?: Record<string, { label: string; added: string }>
+}
+
 export type VaultArchive = {
   version: 3
   updatedAt: string
   /** Base64 32-byte DEK — present in packed blob; stripped from React payload. */
   fileDek?: string
+  /** Vault secrets (CKV3 body only); stripped from React payload. */
+  keys?: VaultKeysSection
   root: FsDir
   /** Soft-deleted items; not a user-visible folder under root. */
   recycleBin?: RecycleBinEntry[]
@@ -63,6 +79,7 @@ export type RawVaultArchive = {
   version: 2 | 3
   updatedAt: string
   fileDek?: string
+  keys?: VaultKeysSection
   root: FsDir | LegacyFsDir
   recycleBin?: RecycleBinEntry[]
 }
@@ -689,9 +706,9 @@ export function searchArchive(
   return hits
 }
 
-/** Strip fileDek so React state never holds DEK bytes. */
+/** Strip fileDek and vault keys so React state never holds key material. */
 export function stripFileDek(archive: VaultArchive): VaultArchive {
-  const { fileDek: _removed, ...rest } = archive
+  const { fileDek: _dek, keys: _keys, ...rest } = archive
   return rest
 }
 
@@ -749,6 +766,25 @@ function isRecycleBin(value: unknown): value is RecycleBinEntry[] {
   return value.every(isRecycleBinEntry)
 }
 
+function isVaultKeysSection(value: unknown): value is VaultKeysSection {
+  if (value === undefined) return true
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const v = value as Record<string, unknown>
+  if (typeof v.sk !== "string") return false
+  if (v.kp !== undefined && typeof v.kp !== "string") return false
+  if (v.passkeys !== undefined) {
+    if (!v.passkeys || typeof v.passkeys !== "object" || Array.isArray(v.passkeys)) {
+      return false
+    }
+    for (const entry of Object.values(v.passkeys as Record<string, unknown>)) {
+      if (!entry || typeof entry !== "object") return false
+      const e = entry as Record<string, unknown>
+      if (typeof e.label !== "string" || typeof e.added !== "string") return false
+    }
+  }
+  return true
+}
+
 /** Validate a packed/unpacked archive (v2 plaintext or v3 encrypted). */
 export function isRawVaultArchive(value: unknown): value is RawVaultArchive {
   if (!value || typeof value !== "object") return false
@@ -756,6 +792,7 @@ export function isRawVaultArchive(value: unknown): value is RawVaultArchive {
   if (v.version !== 2 && v.version !== 3) return false
   if (typeof v.updatedAt !== "string") return false
   if (v.fileDek !== undefined && typeof v.fileDek !== "string") return false
+  if (!isVaultKeysSection(v.keys)) return false
   if (v.recycleBin !== undefined && !isRecycleBin(v.recycleBin)) return false
   return isLegacyFsDir(v.root)
 }
