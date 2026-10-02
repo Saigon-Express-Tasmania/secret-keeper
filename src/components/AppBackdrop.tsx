@@ -7,11 +7,15 @@ export const APP_BG_CREDIT_LABEL =
   "Photo by Marita Kavelashvili on Unsplash"
 
 type AppBackdropProps = {
-  blurred?: boolean
+  /**
+   * `gate`: darkened photo behind the unlock card.
+   * `desktop`: crisp "wallpaper" behind the Finder window (dimmed in Dark Mode).
+   */
+  variant?: "gate" | "desktop"
   priority?: boolean
 }
 
-export function AppBackdrop({ blurred = false, priority = false }: AppBackdropProps) {
+export function AppBackdrop({ variant = "gate", priority = false }: AppBackdropProps) {
   return (
     <div
       aria-hidden
@@ -21,17 +25,15 @@ export function AppBackdrop({ blurred = false, priority = false }: AppBackdropPr
         src={APP_BG_SRC}
         alt=""
         fetchPriority={priority ? "high" : "auto"}
-        className={cn(
-          "size-full object-cover",
-          blurred && "scale-110 blur-2xl"
-        )}
+        className={cn("size-full object-cover", variant === "desktop" && "scale-105")}
       />
       <div
-        className={
-          blurred
-            ? "absolute inset-0 bg-gradient-to-br from-emerald-100/55 via-background/50 to-sky-100/45"
-            : "absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60"
-        }
+        className={cn(
+          "absolute inset-0",
+          variant === "desktop"
+            ? "bg-(--mac-desktop-dim)"
+            : "bg-gradient-to-b from-black/50 via-black/30 to-black/60"
+        )}
       />
     </div>
   )

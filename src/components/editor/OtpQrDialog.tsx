@@ -157,7 +157,7 @@ export function OtpQrDialog({ open, onOpenChange, otp }: OtpQrDialogProps) {
             digits · 30s and may show wrong codes.
           </p>
         ) : null}
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-[11px] text-mac-orange">
           This QR code contains your secret key. Anyone who scans it, or gets
           the downloaded image, can generate your codes.
         </p>

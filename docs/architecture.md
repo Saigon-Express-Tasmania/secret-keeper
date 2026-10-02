@@ -39,7 +39,7 @@ Lock (manual, idle, pagehide, session end) → keys wiped from memory
 | Piece | Role |
 | --- | --- |
 | `src/screens/Gate.tsx` + `src/components/gate/*` | Unlock / create / recovery / sign-in link (`/verify`) state machine, Emergency Kit |
-| `src/screens/Dashboard.tsx` | Explorer, editor, Tools menu, Security dialog |
+| `src/screens/Dashboard.tsx` | Finder-style window (`components/dashboard/FinderApp.tsx`), editor, Security dialog |
 | `src/context/VaultContext.tsx` | React wrapper around one `VaultSession`; idle lock |
 | `src/lib/vault/vaultSession.ts` | Client protocol: create, unlock steps, save with conflict replay, re-key, export/import |
 | `src/lib/crypto/{kdf,keys,vaultFile}.ts` | Argon2id + HKDF, key slots, CKV3 body encryption |

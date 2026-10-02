@@ -72,7 +72,7 @@ they are public in every bundle that was ever deployed. Migrate once:
    variables above in Netlify (Functions scope, Production context). Deploy.
 3. **Create the vault** on the Gate with a **new** master password and the setup
    code; save the Emergency Kit.
-4. **Import**: Tools → Import, choose the `.ckx`, paste the import key, tick
+4. **Import**: Keep menu → Import Vault…, choose the `.ckx`, paste the import key, tick
    "Merge into the top level". Then enable a second factor (Security).
 5. **Clean up:**
    - revoke the old R2 token in Cloudflare;

@@ -43,6 +43,8 @@ type VaultContextValue = {
   unlocked: boolean
   payload: VaultArchive | null
   vault: VaultInfo | null
+  /** Name of the unlocked vault (null when locked). */
+  vaultName: string | null
   /** Why the vault was last locked (shown on the Gate); null before first unlock. */
   lockReason: LockReason | null
   saving: boolean
@@ -54,7 +56,9 @@ type VaultContextValue = {
   decryptFile: (path: string) => Promise<JsonValue>
   /**
    * Clone payload, run mutator, encrypt+upload (replays once on conflict).
-   * On failure keeps the previous payload.
+   * On failure keeps the previous payload. Only one write runs at a time: a
+   * second call while one is in flight throws. A write that finishes after
+   * `lock()` is discarded (the vault stays locked).
    */
   commit: (mutator: (archive: VaultArchive) => void | Promise<void>) => Promise<void>
   /** Encrypt JSON and write as a new/updated encrypted file, then save. */
@@ -109,8 +113,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   // The session (and every key it holds) stays out of React state.
   const sessionRef = useRef<VaultSession | null>(null)
+  /** Synchronous single-flight guard for writes (React `saving` updates too late). */
+  const inFlightRef = useRef(false)
 
+  /** Publish a session's state, unless it was locked or replaced meanwhile. */
   const sync = useCallback((session: VaultSession) => {
+    if (sessionRef.current !== session) return
     setPayload(session.payload)
     setVault(infoFrom(session))
   }, [])
@@ -119,6 +127,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     (session: VaultSession) => {
       sessionRef.current?.wipe()
       sessionRef.current = session
+      inFlightRef.current = false
       sync(session)
       setLockReason(null)
       setSaveError(null)
@@ -129,6 +138,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const lock = useCallback((reason: LockReason = "manual") => {
     sessionRef.current?.wipe()
     sessionRef.current = null
+    inFlightRef.current = false
     clearSecretClipboard()
     setPayload(null)
     setVault(null)
@@ -167,28 +177,46 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     [requireSession, lock]
   )
 
+  /** One write at a time; `saving`/`saveError` only reflect the current session. */
+  const writing = useCallback(
+    async <T,>(operation: (session: VaultSession) => Promise<T>): Promise<T> => {
+      const session = requireSession()
+      if (inFlightRef.current) {
+        throw new Error("Another save is in progress. Try again in a moment.")
+      }
+      inFlightRef.current = true
+      setSaving(true)
+      setSaveError(null)
+      try {
+        const result = await guarded(operation)
+        sync(session)
+        return result
+      } catch (error) {
+        if (sessionRef.current === session) {
+          setSaveError(error instanceof Error ? error.message : "Failed to save vault.")
+        }
+        throw error
+      } finally {
+        if (sessionRef.current === session) {
+          inFlightRef.current = false
+          setSaving(false)
+        }
+      }
+    },
+    [requireSession, guarded, sync]
+  )
+
   const decryptFile = useCallback(
     (path: string) => requireSession().decryptFile(path),
     [requireSession]
   )
 
   const commit = useCallback(
-    async (mutator: (archive: VaultArchive) => void | Promise<void>) => {
-      setSaving(true)
-      setSaveError(null)
-      try {
-        await guarded(async (session) => {
-          await session.save(mutator)
-          sync(session)
-        })
-      } catch (error) {
-        setSaveError(error instanceof Error ? error.message : "Failed to save vault.")
-        throw error
-      } finally {
-        setSaving(false)
-      }
-    },
-    [guarded, sync]
+    (mutator: (archive: VaultArchive) => void | Promise<void>) =>
+      writing(async (session) => {
+        await session.save(mutator)
+      }),
+    [writing]
   )
 
   const putEncryptedFile = useCallback(
@@ -203,20 +231,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   )
 
   const rekey = useCallback(
-    async (options: RekeyOptions) => {
-      setSaving(true)
-      setSaveError(null)
-      try {
-        return await guarded(async (session) => {
-          const result = await session.rekey(options)
-          sync(session)
-          return result
-        })
-      } finally {
-        setSaving(false)
-      }
-    },
-    [guarded, sync]
+    (options: RekeyOptions) => writing((session) => session.rekey(options)),
+    [writing]
   )
 
   const exportVault = useCallback(() => guarded((session) => session.exportFile()), [guarded])
@@ -224,19 +240,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const importVault = useCallback(
     async (blob: Uint8Array, recoveryKeyText: string | null, options?: { intoRoot?: boolean }) => {
       const recoveryKey = recoveryKeyText?.trim() ? parseKey("RK1", recoveryKeyText) : null
-      setSaving(true)
-      setSaveError(null)
-      try {
-        return await guarded(async (session) => {
-          const result = await session.importFile(blob, recoveryKey, options)
-          sync(session)
-          return result.folderPath
-        })
-      } finally {
-        setSaving(false)
-      }
+      const result = await writing((session) => session.importFile(blob, recoveryKey, options))
+      return result.folderPath
     },
-    [guarded, sync]
+    [writing]
   )
 
   const accountRequest = useCallback(
@@ -277,6 +284,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       unlocked,
       payload,
       vault,
+      vaultName: vault?.name ?? null,
       lockReason,
       saving,
       saveError,

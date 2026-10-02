@@ -11,6 +11,8 @@ one-time sign-in links (optionally replacing the Secret Key on a new
 device), passkeys or security keys (WebAuthn PRF), and 30-day trusted
 devices. See [docs/security.md](docs/security.md).
 
+The unlocked vault looks and works like macOS Finder: a window on a desktop with a menu bar, Icons / List / Columns views, Quick Look, Get Info, drag and drop, inline rename, Trash, and Finder keyboard shortcuts. It follows the system Light/Dark appearance. See [docs/screens.md](docs/screens.md).
+
 ## Stack
 
 - Vite + React + TypeScript, Tailwind CSS + shadcn/ui, React Router
@@ -54,7 +56,7 @@ emulation on http://localhost:8888.
    | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from step 1 |
    | `BREVO_API_KEY`, `MAIL_FROM`, `MAIL_FROM_NAME` | from step 2 |
 
-4. Deploy, create your vault, then open **Tools → Security** to add an
+4. Deploy, create your vault, then open **Keep → Security…** to add an
    authenticator app, an email address and passkeys.
 
 Do **not** add `VITE_*` variables: Vite inlines them into the public bundle,
@@ -69,7 +71,7 @@ npm run ck-file -- from-legacy --vault vault          # old Credentials Keep vau
 ```
 
 Both ask for passwords without echoing them, write an encrypted `.ckx` file
-and print a one-time import key. In the app: Tools → Import.
+and print a one-time import key. In the app: Keep → Import Vault…
 
 ## Project layout
 

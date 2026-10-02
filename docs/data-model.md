@@ -8,8 +8,27 @@ body is decrypted only while it is open.
 ## Archive (`VaultArchive`)
 
 ```ts
-type FsFile = { type: "file"; nonce: string; ciphertext: string } // AES-GCM under the file DEK
-type FsDir = { type: "dir"; entries: Record<string, FsNode> }
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue }
+
+type NodeMeta = {
+  createdAt: string  // ISO-8601 (backfilled on unlock for old vaults)
+  modifiedAt: string // ISO-8601
+  icon?: string      // catalog id, e.g. "fluent-color:lock-closed-16"
+}
+
+type FsFile = {
+  type: "file"
+  nonce: string      // base64, 12 bytes
+  ciphertext: string // base64, AES-GCM over UTF-8 JSON bytes
+} & Partial<NodeMeta>
+
+type FsDir = { type: "dir"; entries: Record<string, FsNode> } & Partial<NodeMeta>
 type FsNode = FsFile | FsDir
 
 type RecycleBinEntry = { id: string; originalPath: string; deletedAt: string; node: FsNode }
@@ -30,10 +49,12 @@ type VaultArchive = {
 }
 ```
 
-- The React payload strips `fileDek` and `keys`; the session keeps them
-  outside React state.
-- Names must not be empty, `.`, `..`, or contain `/` or `\`.
-- Empty vaults seed `passwords/`, `auth-keys/`, `wallets/`, `notes/`.
+- Folder and file names are the keys in `entries` (paths look like `passwords/github.json`).
+- The React payload strips `fileDek` and `keys`; the session keeps them outside React state (the file DEK as a non-extractable `CryptoKey`).
+- Empty vaults seed four directories: `passwords/`, `auth-keys/`, `wallets/`, `notes/`. Extra dirs and files are allowed.
+- Name segments must not be empty, `.`, `..`, or contain `/` or `\`.
+- `icon` absent (or a default id) means the plain folder / document artwork; the four seed folders fall back to their seed icons by name.
+- The **Trash** (stored as `recycleBin`; called Recycle Bin in older versions) is archive metadata, not a folder in `root`. Soft-delete moves a file or whole folder tree into a bin entry; restore puts it back at `originalPath` (or `name (restored)` if taken); purge removes the entry forever. Missing `recycleBin` is treated as `[]`.
 - File bodies are KeePass-style account entries (`src/lib/account/schema.ts`):
   title, username, password, URL, recovery email/keys, notes, TOTP/HOTP.
 
@@ -103,7 +124,7 @@ exceeds the declared length.
 
 Same container with `purpose: "export"` and only a recovery slot:
 
-- **In-app export** (Tools → Export): the vault's id, VK and recovery slot;
+- **In-app export** (Keep menu → Export Vault…): the vault's id, VK and recovery slot;
   workspace only (no Recycle Bin, no `keys`). Opens with this vault's
   Recovery Key, or directly in the same vault.
 - **CLI import file** (`npm run ck-file`): a fresh vault id/VK and a random

@@ -109,7 +109,7 @@ shaped this design are in [security-audit.md](./security-audit.md).
 - A trusted device only skips the second factor. The password is still
   checked, with the device's own failure counter: 5 wrong passwords revoke
   it, and they do not lock the vault for its owner.
-- **Revoking** a device (Tools → Security) makes it pass the second factor
+- **Revoking** a device (Keep menu → Security…) makes it pass the second factor
   again. It does not end a session already open there, and it may still
   remember the Secret Key: issue a new Secret Key, or change the password
   with "sign out all trusted devices", to cut it off completely.
@@ -138,7 +138,7 @@ See [data-model.md](./data-model.md) for byte layouts.
 - **Re-keying.** Changing the password, Secret Key or Recovery Key re-wraps
   the slots and always mints a new server share, so every older blob, backup
   or cached copy stops opening (the server no longer releases the old share).
-  "Rotate all keys" (Tools → Security) also replaces VK, the file DEK, the
+  "Rotate all keys" (Keep menu → Security…) also replaces VK, the file DEK, the
   Secret Key and the Recovery Key, re-encrypts every file and can sign out
   all trusted devices. Copies made before still open with the old Recovery
   Key, so use it after a device or an Emergency Kit may have been exposed.
@@ -146,6 +146,13 @@ See [data-model.md](./data-model.md) for byte layouts.
 - **Key commitment.** AES-GCM is not key-committing; a malicious server could
   in theory craft a slot that opens under two keys, but it already sees the
   authKey, so it gains nothing it could not get by guessing passwords.
+
+## Session safety in the UI
+
+- **One save at a time.** `commit()` is single-flight and always starts from the latest committed archive; a second save while one is running is refused, and the Finder disables vault-changing commands meanwhile. Overlapping saves can't silently drop a change.
+- **Lock wins.** `lock()` drops the session; a save that completes after locking is discarded instead of putting the archive back into React state. The Finder's Lock (red traffic light / menu) waits for a save in flight, then locks.
+- **Edited files first.** Moving, renaming or trashing a folder that contains the open, edited account asks Save / Don't Save / Cancel before the change, so a later save can't recreate the old path.
+- **No names leak into browser state.** Vault paths never appear in the URL, page title, `localStorage` prefs (`ck:finder` holds layout only), or drag-and-drop data (drags carry an opaque marker; paths stay in page memory). Cut/Copy/Paste of items uses an in-app clipboard. The explicit copy buttons for usernames, passwords and codes do write to the system clipboard (wiped after 30 s).
 
 ## Server rules
 
