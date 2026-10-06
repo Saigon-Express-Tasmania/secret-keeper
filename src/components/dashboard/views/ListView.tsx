@@ -5,6 +5,7 @@ import { useFinder } from "@/components/dashboard/finderContext"
 import type { FinderController } from "@/components/dashboard/hooks/useFinderController"
 import { ItemsContextMenu } from "@/components/dashboard/views/ItemsContextMenu"
 import { credentialColumns } from "@/components/dashboard/views/credentialColumns"
+import { EmptyState } from "@/components/dashboard/views/EmptyState"
 import { RenameField } from "@/components/dashboard/views/RenameField"
 import { fitColumns, NAME_MIN, type ListColumn } from "@/components/dashboard/views/listColumns"
 import {
@@ -12,6 +13,7 @@ import {
   iconKind,
   isCut,
   sizeText,
+  whereLabel,
 } from "@/components/dashboard/views/itemDisplay"
 import { domIdFor, useViewSurface } from "@/components/dashboard/views/useViewSurface"
 import { FinderIcon } from "@/components/icons/FinderIcon"
@@ -21,12 +23,6 @@ import { finderKind, folderItems } from "@/lib/finder/items"
 import { nextSort } from "@/lib/finder/sort"
 import type { FinderItem, SortKey } from "@/lib/finder/types"
 import { cn } from "@/lib/utils"
-
-
-function whereLabel(c: FinderController, where: string | undefined): string {
-  if (where === undefined) return ""
-  return where === "" ? c.vaultName : where.split("/").join(" › ")
-}
 
 /** Columns for the current mode, before width fitting. */
 function candidateColumns(c: FinderController, extra: ListColumn[]): ListColumn[] {
@@ -202,9 +198,7 @@ export function ListView() {
           {header("Name", "name", undefined, true)}
           {columns.map((col) => header(col.label, col.sort, col.align))}
         </div>
-        {items.length === 0 && mode === "search" ? (
-          <p className="pt-16 text-center text-[13px] text-mac-label-3">No Results</p>
-        ) : null}
+        <EmptyState />
         <div role="rowgroup" className="py-1">
           {items.map((item, index) => {
             const selected = selection.keys.has(item.key)

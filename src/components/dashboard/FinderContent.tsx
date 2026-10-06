@@ -1,5 +1,6 @@
 import { useFinder } from "@/components/dashboard/finderContext"
 import { FileViewer } from "@/components/dashboard/FileViewer"
+import { CardView } from "@/components/dashboard/views/CardView"
 import { ColumnView } from "@/components/dashboard/views/ColumnView"
 import { IconView } from "@/components/dashboard/views/IconView"
 import { ListView } from "@/components/dashboard/views/ListView"
@@ -18,6 +19,7 @@ export function FinderContent() {
       />
     )
   }
+  if (view === "cards") return <CardView />
   if (view === "icons") return <IconView />
   if (view === "columns") return <ColumnView />
   return <ListView />

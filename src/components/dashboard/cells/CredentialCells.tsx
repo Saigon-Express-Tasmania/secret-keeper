@@ -4,6 +4,7 @@ import { Check, Copy, Eye, EyeOff, Loader2 } from "lucide-react"
 import type { ListedAccountState } from "@/components/dashboard/useListedAccounts"
 import { useNow } from "@/hooks/useNow"
 import { generateOtpCode } from "@/lib/otp/otp"
+import { copySecretText } from "@/lib/security/clipboard"
 import { cn } from "@/lib/utils"
 
 /** Stop row selection / open when using the inline buttons. */
@@ -46,8 +47,7 @@ function CopyMini({ value }: { value: string }) {
     <MiniButton
       label={copied ? "Copied" : "Copy"}
       onClick={() => {
-        void navigator.clipboard
-          .writeText(value)
+        void copySecretText(value)
           .then(() => {
             setCopied(true)
             window.setTimeout(() => setCopied(false), 1200)

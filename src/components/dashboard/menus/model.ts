@@ -85,6 +85,7 @@ export function viewMenu(c: FinderController): MenuNode[] {
     cmd("view.icons"),
     cmd("view.list"),
     cmd("view.columns"),
+    cmd("view.cards"),
     sep,
     sortMenu(c),
     sep,
@@ -155,7 +156,7 @@ function viewAsMenu(): MenuNode {
   return {
     type: "sub",
     label: "View",
-    children: [cmd("view.icons"), cmd("view.list"), cmd("view.columns")],
+    children: [cmd("view.icons"), cmd("view.list"), cmd("view.columns"), cmd("view.cards")],
   }
 }
 

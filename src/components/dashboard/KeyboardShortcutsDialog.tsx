@@ -11,7 +11,7 @@ import { formatShortcut, IS_MAC, primaryShortcut } from "@/lib/finder/shortcuts"
 const SECTIONS: [string, CommandId[]][] = [
   ["File", ["file.newFolder", "file.newAccount", "file.open", "file.rename", "file.quickLook", "file.getInfo", "file.duplicate", "file.moveToTrash", "file.deleteImmediately", "file.emptyTrash", "file.find", "file.save"]],
   ["Edit", ["edit.cut", "edit.copy", "edit.paste", "edit.selectAll"]],
-  ["View", ["view.icons", "view.list", "view.columns", "view.showCredentials", "view.sidebar", "view.pathBar", "view.statusBar"]],
+  ["View", ["view.icons", "view.list", "view.columns", "view.cards", "view.showCredentials", "view.sidebar", "view.pathBar", "view.statusBar"]],
   ["Go", ["go.back", "go.forward", "go.enclosing", "go.vault"]],
 ]
 

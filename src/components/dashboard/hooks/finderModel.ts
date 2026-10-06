@@ -39,7 +39,7 @@ export type FinderModel = {
   fileItem: FinderItem | null
   view: ViewMode
   sort: SortSpec
-  /** Icons/List: everything shown. Columns: the focused column. */
+  /** Icons/List/Cards: everything shown. Columns: the focused column. */
   items: FinderItem[]
   columns: FinderColumn[] | null
   /** Column view: index of the column holding the selection. */
@@ -79,8 +79,13 @@ export function deriveFinderModel(
 
   const containerDir = mode === "file" ? parentPath(path) : path
   const sort = mode === "trash" ? prefs.trashSort : prefs.sort
+  // Columns can't show search results or the Trash; Cards would decrypt the
+  // Trash, which is never decrypted. Both fall back to List there.
   const view: ViewMode =
-    prefs.view === "columns" && (mode === "search" || mode === "trash") ? "list" : prefs.view
+    (prefs.view === "columns" && (mode === "search" || mode === "trash")) ||
+    (prefs.view === "cards" && mode === "trash")
+      ? "list"
+      : prefs.view
 
   const phantom =
     state.phantom && mode === "folder"
@@ -101,7 +106,7 @@ export function deriveFinderModel(
     const extra = phantom.filter((p) => parentPath(p.path) === path)
     if (view === "list") {
       items = flattenTree(archive, path, state.expanded, sort, prefs.foldersOnTop, extra)
-    } else if (view === "icons") {
+    } else if (view === "icons" || view === "cards") {
       items = sortItems([...folderItems(archive, path), ...extra], sort, prefs.foldersOnTop)
     } else {
       columns = buildColumns(archive, path, sort, prefs.foldersOnTop, extra)

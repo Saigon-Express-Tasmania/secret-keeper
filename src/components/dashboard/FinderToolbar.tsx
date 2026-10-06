@@ -6,6 +6,7 @@ import {
   Columns3,
   Eye,
   EyeOff,
+  IdCard,
   LayoutGrid,
   List,
   PanelLeft,
@@ -100,6 +101,7 @@ export function FinderToolbar() {
               icon: <Columns3 />,
               disabled: mode === "search" || mode === "trash",
             },
+            { value: "cards", label: "Cards", icon: <IdCard />, disabled: mode === "trash" },
           ]}
         />
       ) : null}
@@ -122,11 +124,23 @@ export function FinderToolbar() {
         </DropdownMenuContent>
       </DropdownMenu>
       {mode === "folder" || mode === "search" ? (
+        // Card view always decrypts: the eye stays on and can't be turned off
+        // (aria-disabled rather than disabled keeps the tooltip saying why).
         <ToolbarButton
-          label={c.showCredentials ? "Hide Credentials" : "Show Credentials"}
-          icon={c.showCredentials ? <Eye /> : <EyeOff />}
-          pressed={c.showCredentials}
-          onClick={() => c.setShowCredentials(!c.showCredentials)}
+          label={
+            view === "cards"
+              ? "Card view always shows credentials"
+              : c.showCredentials
+                ? "Hide Credentials"
+                : "Show Credentials"
+          }
+          icon={c.credentialsShown ? <Eye /> : <EyeOff />}
+          pressed={c.credentialsShown}
+          aria-disabled={view === "cards" || undefined}
+          className={cn(view === "cards" && "cursor-default opacity-60 hover:bg-mac-sidebar-selection")}
+          onClick={() => {
+            if (view !== "cards") c.setShowCredentials(!c.showCredentials)
+          }}
         />
       ) : null}
       {mode !== "trash" ? (

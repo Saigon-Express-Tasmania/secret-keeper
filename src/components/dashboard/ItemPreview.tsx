@@ -15,6 +15,7 @@ import {
 import { childCount, finderKind, nodeSizeBytes } from "@/lib/finder/items"
 import type { FinderItem } from "@/lib/finder/types"
 import { generateOtpCode } from "@/lib/otp/otp"
+import { copySecretText } from "@/lib/security/clipboard"
 import { cn } from "@/lib/utils"
 
 function isHttpUrl(value: string): boolean {
@@ -34,8 +35,7 @@ function CopyIcon({ value }: { value: string }) {
       aria-label={copied ? "Copied" : "Copy"}
       title={copied ? "Copied" : "Copy"}
       onClick={() =>
-        void navigator.clipboard
-          .writeText(value)
+        void copySecretText(value)
           .then(() => {
             setCopied(true)
             window.setTimeout(() => setCopied(false), 1200)
@@ -162,7 +162,7 @@ export function ItemPreview({
         Put this item back to preview its contents.
       </p>
     )
-  } else if (isAccount && !c.showCredentials) {
+  } else if (isAccount && !c.credentialsShown) {
     body = (
       <div className="flex flex-col items-center gap-2 text-center text-[12px] text-mac-label-2">
         <p>Credentials are hidden. Contents are only decrypted when you choose to show them.</p>

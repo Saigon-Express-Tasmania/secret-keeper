@@ -60,9 +60,12 @@ export type FinderController = {
   model: FinderModel
   prefs: FinderPrefs
   setPrefs: (patch: Partial<FinderPrefs>) => void
+  /** The saved Show Credentials setting (Icons / List / Columns). */
   showCredentials: boolean
   setShowCredentials: (on: boolean) => void
-  /** Decrypted account summaries for visible files (Show Credentials only). */
+  /** Visible accounts are decrypted: Show Credentials, or Card view. */
+  credentialsShown: boolean
+  /** Decrypted account summaries for visible files (when `credentialsShown`). */
   credentials: ReadonlyMap<string, ListedAccountState>
   mutations: FinderMutations
   busy: boolean
@@ -197,9 +200,11 @@ export function useFinderController(archive: VaultArchive): FinderController {
   )
 
   // Decrypt only what is on screen (or being previewed), and only when the
-  // user turned on Show Credentials. Trash items are never decrypted.
+  // user turned on Show Credentials or is in Card view (cards need the
+  // contents). Trash items are never decrypted.
+  const credentialsShown = showCredentials || model.view === "cards"
   const visibleFiles = useMemo(() => {
-    if (!showCredentials || model.mode === "trash" || model.mode === "file") return []
+    if (!credentialsShown || model.mode === "trash" || model.mode === "file") return []
     const seen = new Set<string>()
     const out: { path: string; node: FsFile }[] = []
     const add = (key: string | null) => {
@@ -211,8 +216,8 @@ export function useFinderController(archive: VaultArchive): FinderController {
     if (model.view !== "columns") for (const item of model.items) add(item.key)
     add(state.selection.focus)
     return toFileRefs(out)
-  }, [showCredentials, model, state.selection.focus])
-  const credentials = useListedAccounts(showCredentials, visibleFiles)
+  }, [credentialsShown, model, state.selection.focus])
+  const credentials = useListedAccounts(credentialsShown, visibleFiles)
 
   // Async flows (await alert / save) must read the latest values.
   const latest = useRef({ archive, state, model })
@@ -580,6 +585,7 @@ export function useFinderController(archive: VaultArchive): FinderController {
     setPrefs,
     showCredentials,
     setShowCredentials,
+    credentialsShown,
     credentials,
     mutations,
     busy,

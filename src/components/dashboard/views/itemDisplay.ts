@@ -1,3 +1,4 @@
+import type { FinderController } from "@/components/dashboard/hooks/useFinderController"
 import { customGlyphId } from "@/lib/finder/icons"
 import { childCount, nodeSizeBytes } from "@/lib/finder/items"
 import { formatFinderSize, formatItemCount } from "@/lib/finder/format"
@@ -23,6 +24,12 @@ export function infoText(item: FinderItem): string {
   if (item.source === "phantom") return ""
   if (item.kind === "dir") return formatItemCount(childCount(item.node))
   return formatFinderSize(nodeSizeBytes(item.node))
+}
+
+/** Search "Where" / Trash "Original Location": the parent folder path. */
+export function whereLabel(c: FinderController, where: string | undefined): string {
+  if (where === undefined) return ""
+  return where === "" ? c.vaultName : where.split("/").join(" › ")
 }
 
 export function isCut(clipboard: FinderClipboard, item: FinderItem): boolean {

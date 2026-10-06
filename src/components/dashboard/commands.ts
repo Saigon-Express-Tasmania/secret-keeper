@@ -32,14 +32,15 @@ const named = (verb: string, x: CmdCtx, fallback = verb) => {
 }
 
 function setView(view: ViewMode): CommandSpec {
-  const labels = { icons: "as Icons", list: "as List", columns: "as Columns" }
-  const keys = { icons: "1", list: "2", columns: "3" }
+  const labels = { icons: "as Icons", list: "as List", columns: "as Columns", cards: "as Cards" }
+  const keys = { icons: "1", list: "2", columns: "3", cards: "4" }
   return {
     label: labels[view],
     shortcuts: [{ key: keys[view], code: `Digit${keys[view]}`, mod: true }],
     enabled: (x) =>
       x.c.model.mode !== "file" &&
-      !(view === "columns" && (x.c.model.mode === "search" || x.c.model.mode === "trash")),
+      !(view === "columns" && (x.c.model.mode === "search" || x.c.model.mode === "trash")) &&
+      !(view === "cards" && x.c.model.mode === "trash"),
     checked: (x) => x.c.model.view === view,
     run: (x) => x.c.setPrefs({ view }),
   }
@@ -256,6 +257,7 @@ export const COMMANDS = {
   "view.icons": setView("icons"),
   "view.list": setView("list"),
   "view.columns": setView("columns"),
+  "view.cards": setView("cards"),
   "view.sortName": sortBy("name", "Name"),
   "view.sortKind": sortBy("kind", "Kind"),
   "view.sortModified": sortBy("modified", "Date Modified"),
@@ -269,7 +271,9 @@ export const COMMANDS = {
   "view.showCredentials": {
     label: "Show Credentials",
     shortcuts: [{ key: ".", code: "Period", mod: true, shift: true }],
-    checked: (x) => x.c.showCredentials,
+    // Card view always decrypts; the saved setting applies to the other views.
+    enabled: (x) => x.c.model.view !== "cards",
+    checked: (x) => x.c.credentialsShown,
     run: (x) => x.c.setShowCredentials(!x.c.showCredentials),
   },
   "view.sidebar": toggle("Show Sidebar", "sidebar", [

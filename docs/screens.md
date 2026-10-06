@@ -82,9 +82,9 @@ The unlocked vault looks and behaves like a macOS **Finder** window on a desktop
 **UI (≥ 768px wide):**
 
 - **Desktop:** the Gate photo as an unblurred wallpaper, with a macOS-style **menu bar** on top: app menu **Keep** (About, Change Master Password…, Export Vault…, Import Vault…, Lock Vault), **File**, **Edit**, **View**, **Go**, **Window**, **Help** (Keyboard Shortcuts). On the right: a save indicator, a Lock button and the clock.
-- **Window:** traffic lights — red **locks** the vault (after any save in flight; a dot in it means the open account has unsaved edits), yellow **minimizes** the window to a vault icon on the desktop (double-click to restore; the window stays mounted so edits survive), green **zooms** to fill the screen (remembered). Double-clicking the toolbar also zooms.
+- **Window:** traffic lights — red **locks** the vault (after any save in flight; a dot in it means the open account has unsaved edits), yellow **minimizes** the window to a vault icon on the desktop (double-click to restore; the window stays mounted so edits survive), green **zooms** to fill the screen (remembered). Double-clicking the toolbar also zooms. Unzoomed, the window still fills the desktop below the menu bar (no width limit), leaving a small margin of wallpaper that grows with the screen (12–24 px).
 - **Sidebar** (translucent, resizable, can be hidden): *Favorites* — the vault root (named after the vault) and its top-level folders, shown with tinted symbols; *Locations* — **Trash** with an item count.
-- **Toolbar:** sidebar toggle, Back / Forward, the title (folder name, “Searching “…””, Trash, or the open file with “— Edited”), the **Icons / List / Columns** switcher, Sort By menu, the ⋯ action menu, the **Show Credentials** eye toggle and the search field.
+- **Toolbar:** sidebar toggle, Back / Forward, the title (folder name, “Searching “…””, Trash, or the open file with “— Edited”), the **Icons / List / Columns / Cards** switcher, Sort By menu, the ⋯ action menu, the **Show Credentials** eye toggle and the search field.
 - **Content:** the current folder in the chosen view, search results, the Trash, or the account editor when a file is open.
 - **Path bar** (selected item’s path, else the current folder; segments are clickable and accept drops) and **status bar** (“3 of 12 selected”, save status, icon-size slider in Icons view). Both can be hidden from the View menu.
 
@@ -95,11 +95,13 @@ The unlocked vault looks and behaves like a macOS **Finder** window on a desktop
 - **Icons:** Big Sur–style folder and document artwork with the item’s custom icon drawn on it; label and optional *item info* line (folder item count; file size, or the username when credentials are shown). Icon size slider 32–128 px.
 - **List:** Name, Date Modified, Size (folders “--” unless *Calculate All Sizes*), Kind, optional Date Created; *Where* in search results; *Original Location* and *Date Deleted* in the Trash. Folders expand inline with disclosure triangles (⌥-click expands all). Click a header to sort; columns drop off as the window narrows.
 - **Columns:** Miller columns from the vault root to the current folder. Selecting a folder opens it in the next column; selecting an account shows a preview pane (with an Open button).
+- **Cards** (the default): a responsive grid of cards (one column on phones). Each card shows a large (64 px) icon beside the title (or the file name), the description (two lines), a Folder / Account badge with the file name when it differs from the title, and *in <folder>* in search results. Accounts add **User** (copy), **Pass** (masked; reveal/copy) and the live **OTP** code (copy); the footer shows Date Modified and the size (folders: item count). Card view always decrypts the visible account files, as if Show Credentials were on. It isn’t available in the Trash, which shows List instead.
+- **Empty listings** show a message instead of a blank view: *This Folder Is Empty* (with **New Account** / **New Folder** buttons), *Trash Is Empty*, or *No Results* for a search. An empty column in Columns view reads *Empty Folder*.
 - Sorting is Finder’s natural order (“file2” before “file10”) with **Keep Folders on Top** on by default. Kind is “Folder” or “Account”; dates read “Today at 9:41 AM”.
 
 **Selection and opening:** click selects; ⌘-click (Ctrl elsewhere) toggles; Shift-click extends; clicking empty space deselects; arrow keys move (grid-aware in Icons, ←/→ change columns or expand/collapse in List); typing jumps to a name. **Double-click** (or ⌘O / ⌘↓) opens: a folder navigates, an account opens in the editor inside the window, a Trash item explains it must be put back first. Going up (⌘↑, Back to a parent) re-selects the folder you came from. Right-clicking an unselected item selects it first.
 
-**Account editor** (file open): replaces the content area; Back/⌘[ returns to the folder with the file selected. The file body is decrypted on open and cleared when you leave or lock. Sections are grouped like System Settings. **Save** (⌘S) re-encrypts the file and saves the vault. Leaving with unsaved edits (Back, Lock, navigating, or changing an ancestor folder of the file) asks *Do you want to save the changes you made to “name”?* — **Save / Don’t Save / Cancel** — after waiting for any save already in flight. The tab warns before closing while saving or with unsaved edits.
+**Account editor** (file open): replaces the content area; Back/⌘[ returns to the folder with the file selected. The file body is decrypted on open and cleared when you leave or lock. A header shows the file’s icon as a large avatar — click it for **Change Icon…** (saved right away; unsaved edits in the form are kept) — next to the title and description, edited in place, and the file name, size and date modified. Below, sections are grouped like System Settings: **Login** (username, password with generator, website) and **Recovery** on the left, **Authenticator** on the right, and **Notes** across the full width on wide windows (one column on narrow ones). **Save** (⌘S) re-encrypts the file and saves the vault. Leaving with unsaved edits (Back, Lock, navigating, or changing an ancestor folder of the file) asks *Do you want to save the changes you made to “name”?* — **Save / Don’t Save / Cancel** — after waiting for any save already in flight. The tab warns before closing while saving or with unsaved edits.
 
 **Creating and renaming:** **New Folder** (⌥⌘N) and **New Account** (⌥⇧⌘N) add an “untitled folder” / “untitled.json” placeholder in rename mode; Return or clicking away creates it (one save), Escape cancels. “.json” is added to account names without an extension; the new account then opens in the editor. **Return** (or F2 off-Mac) renames the selected item inline, selecting the name without its extension. Invalid or taken names show an alert and keep the field open. Icons are changed afterwards with **Change Icon…** or **Get Info** (*Use Default Icon* resets them).
 
@@ -109,7 +111,7 @@ The unlocked vault looks and behaves like a macOS **Finder** window on a desktop
 
 **Search:** ⌘F focuses the field; matches names and ancestor folder names only and never decrypts contents. A scope bar chooses the whole vault or the folder the search started in (that folder’s own name doesn’t count as a match). Results show in Icons or List; Escape clears.
 
-**Show Credentials** (eye toggle, View menu, ⇧⌘.) decrypts the **visible** account files only — the current listing, search results, the Column preview, or the Quick Look target — and adds Username, Password (masked; reveal/copy) and live One-Time Code columns in List view. Off by default; remembered as `ck:decrypt-listing`.
+**Show Credentials** (eye toggle, View menu, ⇧⌘.) decrypts the **visible** account files only — the current listing, search results, the Column preview, or the Quick Look target — and adds Username, Password (masked; reveal/copy) and live One-Time Code columns in List view. Off by default; remembered as `ck:decrypt-listing`. Card view always decrypts, so there the eye shows on and can’t be turned off; the remembered setting still applies to the other views. Leaving Card view with the setting off drops the decrypted summaries.
 
 **Quick Look** (Space) shows a floating, non-modal preview of the focused item that follows the selection: icon, kind, size, dates, and — with Show Credentials on — title, username, masked password, one-time code and website. **Get Info** (⌘I) shows kind, encrypted size, location and dates (Trash: original location and date deleted) and the icon controls.
 
@@ -127,13 +129,13 @@ The unlocked vault looks and behaves like a macOS **Finder** window on a desktop
 | Delete Immediately / Empty Trash | ⌥⌘⌫ / ⇧⌘⌫ | Shift+Delete / menu |
 | Cut / Copy / Paste / Select All | ⌘X ⌘C ⌘V ⌘A | Ctrl+X C V A |
 | Find / Save | ⌘F / ⌘S | Ctrl+F / Ctrl+S |
-| Icons / List / Columns | ⌘1 / ⌘2 / ⌘3 | Ctrl+1 / 2 / 3 |
+| Icons / List / Columns / Cards | ⌘1 / ⌘2 / ⌘3 / ⌘4 | Ctrl+1 / 2 / 3 / 4 |
 | Back / Forward / Enclosing Folder | ⌘[ / ⌘] / ⌘↑ | Ctrl+[ / ] / ↑ |
 | Vault root | ⇧⌘H | Ctrl+Shift+H |
 | Show Credentials | ⇧⌘. | Ctrl+Shift+. |
 | Sidebar / Path Bar / Status Bar | ⌃⌘S / ⌥⌘P / ⌘/ | Ctrl+Alt+S / Ctrl+Alt+P / Ctrl+/ |
 
-Some Finder shortcuts are reserved by browsers (⇧⌘N, ⌘N, ⌘W, ⌃⌘Q); they have alternates above or live in the menus. ⌘1–3 and ⇧⌘⌫ may be taken by the browser in some cases; the toolbar and menus always work. Shortcuts don’t fire while typing in a text field (except ⌘S, ⌘F, ⌘[ and ⌘]).
+Some Finder shortcuts are reserved by browsers (⇧⌘N, ⌘N, ⌘W, ⌃⌘Q); they have alternates above or live in the menus. ⌘1–4 and ⇧⌘⌫ may be taken by the browser in some cases; the toolbar and menus always work. Shortcuts don’t fire while typing in a text field (except ⌘S, ⌘F, ⌘[ and ⌘]).
 
 **Other behavior:**
 
@@ -143,7 +145,7 @@ Some Finder shortcuts are reserved by browsers (⇧⌘N, ⌘N, ⌘W, ⌃⌘Q); t
 - **Export** downloads a `.ckx` file that opens with this vault's Recovery Key. **Import** takes a `.ckx` plus a Recovery Key or one-time import key (empty for this vault's own exports); an import lands in a new “Imported YYYY-MM-DD” folder (or the root), which opens. Old `.ckv` files must be converted with `npm run ck-file -- from-legacy`.
 - Saves upload the next revision with `If-Match`; if another device saved first, the latest version is fetched and the change is replayed once.
 - Copy buttons wipe the clipboard after 30 s (or on the next focus if the tab was in the background).
-- Layout preferences (view, sort, icon size, sidebar width/visibility, path/status bars, zoom) persist in `localStorage` as `ck:finder`. They never include vault names or paths, and paths never appear in the URL or page title.
+- Layout preferences (view, sort, icon size, sidebar width/visibility, path/status bars, zoom) persist in `localStorage` as `ck:finder` (version 2: prefs saved before Card view existed keep everything but the view, which becomes Cards once). They never include vault names or paths, and paths never appear in the URL or page title.
 
 ## Security dialog
 

@@ -147,6 +147,9 @@ export function ColumnView() {
                 </div>
               )
             })}
+            {col.items.length === 0 ? (
+              <p className="pt-4 text-center text-[12px] text-mac-label-3 select-none">Empty Folder</p>
+            ) : null}
           </div>
         ))}
         {preview ? (

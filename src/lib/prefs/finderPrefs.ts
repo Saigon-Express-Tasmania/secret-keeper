@@ -18,7 +18,8 @@ export type FinderPrefs = {
 }
 
 const STORAGE_KEY = "ck:finder"
-const VERSION = 1
+/** v2: Cards became the default view; v1 prefs keep everything but `view`. */
+const VERSION = 2
 
 export const ICON_SIZE_MIN = 32
 export const ICON_SIZE_MAX = 128
@@ -26,7 +27,7 @@ export const SIDEBAR_MIN = 150
 export const SIDEBAR_MAX = 320
 
 export const DEFAULT_FINDER_PREFS: FinderPrefs = {
-  view: "icons",
+  view: "cards",
   sort: { key: "name", dir: "asc" },
   trashSort: { key: "deleted", dir: "desc" },
   foldersOnTop: true,
@@ -41,7 +42,7 @@ export const DEFAULT_FINDER_PREFS: FinderPrefs = {
   zoomed: false,
 }
 
-const VIEWS: readonly ViewMode[] = ["icons", "list", "columns"]
+const VIEWS: readonly ViewMode[] = ["icons", "list", "columns", "cards"]
 const SORT_KEYS: readonly SortKey[] = ["name", "kind", "modified", "created", "size", "deleted"]
 
 function asBool(v: unknown, fallback: boolean): boolean {
@@ -69,8 +70,13 @@ export function readFinderPrefs(): FinderPrefs {
   try {
     const text = localStorage.getItem(STORAGE_KEY)
     const parsed: unknown = text ? JSON.parse(text) : null
-    if (parsed && typeof parsed === "object" && (parsed as { v?: unknown }).v === VERSION) {
+    const v = parsed && typeof parsed === "object" ? (parsed as { v?: unknown }).v : undefined
+    if (v === VERSION) {
       raw = parsed as Record<string, unknown>
+    } else if (v === 1) {
+      const { view: _view, ...rest } = parsed as Record<string, unknown>
+      void _view
+      raw = rest
     }
   } catch {
     raw = {}

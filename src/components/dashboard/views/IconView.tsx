@@ -1,4 +1,5 @@
 import { useFinder } from "@/components/dashboard/finderContext"
+import { EmptyState } from "@/components/dashboard/views/EmptyState"
 import { ItemsContextMenu } from "@/components/dashboard/views/ItemsContextMenu"
 import { RenameField } from "@/components/dashboard/views/RenameField"
 import {
@@ -122,9 +123,7 @@ export function IconView() {
           dropKey === `bg:${c.model.path}` && "shadow-[inset_0_0_0_2px_var(--mac-accent)]"
         )}
       >
-        {items.length === 0 && c.model.mode === "search" ? (
-          <p className="pt-16 text-center text-[13px] text-mac-label-3">No Results</p>
-        ) : null}
+        <EmptyState />
         <div
           className="grid content-start"
           style={{

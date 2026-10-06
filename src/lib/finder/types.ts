@@ -1,6 +1,6 @@
 import type { FsNode } from "@/lib/vault/fs"
 
-export type ViewMode = "icons" | "list" | "columns"
+export type ViewMode = "icons" | "list" | "columns" | "cards"
 
 export type SortKey = "name" | "kind" | "modified" | "created" | "size" | "deleted"
 export type SortDir = "asc" | "desc"
